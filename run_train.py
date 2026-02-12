@@ -1,7 +1,6 @@
 import os
 import json
 import argparse
-import torch
 from datetime import datetime
 from utils.builder import build_agent
 from utils.train import train_loop
@@ -9,11 +8,13 @@ from utils.test import test_loop
 
 def main(
         config_path: str,
-        T: int,
-        N: int,
+        iterations: int,
+        episodes: int,
         device: str = "cpu"
 ) -> None:
-    """Unified entry point for running experiments with automatic artifact packing."""
+    """
+    Unified entry point for running experiments with automatic artifact packing.
+    """
     
     with open(config_path, 'r') as f:
         config_dict = json.load(f)
@@ -39,8 +40,8 @@ def main(
     train_loop(
         env_name=env_name,
         agent=agent,
-        T=T,
-        N=N,
+        iterations=iterations,
+        episodes=episodes,
         monitor_mode=['cli', 'live', 'file']
     )
 
@@ -60,9 +61,18 @@ def main(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train and pack RL experiments.")
     parser.add_argument('config', type=str, help='Path to experiment json')
-    parser.add_argument('--T', type=int, default=500, help='Training iterations')
-    parser.add_argument('--N', type=int, default=10, help='Evaluation window size')
-    parser.add_argument('--device', type=str, default='cpu', help='Device (cpu/cuda)')
+    parser.add_argument(
+        '-T', '--iterations',
+        type=int, default=500, help='Training iterations'
+    )
+    parser.add_argument(
+        '-N', '--episodes',
+        type=int, default=10, help='Evaluation window size'
+    )
+    parser.add_argument(
+        '--device',
+        type=str, default='cpu', help='Device (cpu/cuda)'
+    )
     parser.add_argument(
         '--monitor', 
         nargs='+', 
@@ -73,7 +83,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(
         config_path=args.config, 
-        T=args.T, 
-        N=args.N, 
-        device=args.device
+        iterations=args.iterations, 
+        episodes=args.episodes, 
+        device=args.device,
     )

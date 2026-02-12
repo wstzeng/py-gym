@@ -1,4 +1,3 @@
-import torch
 from torch import nn, optim
 from agent.encoder import *
 from agent.policy import *
@@ -15,7 +14,7 @@ def build_sequential(
     for cfg in layer_configs:
         layer_type = getattr(nn, cfg['type'])
         params = {k: v for k, v in cfg.items() if k != 'type'}
-        
+
         if layer_type == nn.Linear:
             layer = layer_type(in_features=current_dim, **params)
             current_dim = params['out_features']
@@ -31,18 +30,21 @@ def build_optimizer(
     """Builds optimizer with support for parameter groups (custom LRs)."""
     opt_cfg = config_dict['optimizer']
     opt_cls = getattr(optim, opt_cfg['type'])
-    
+
     custom_lrs = config_dict['hyper_params'].get('custom_lrs', {})
     default_lr = opt_cfg['params'].get('lr', 1e-3)
-    
+
     param_groups = []
+
     for comp_name, module in agent_components.items():
-        # Scans internal children (e.g., policy.actor, policy.critic)
-        for name, child in module.named_children():
-            lr = custom_lrs.get(name, default_lr)
-            param_groups.append({'params': child.parameters(), 'lr': lr})
-            
-    # Remove default lr from params to avoid override if needed
+        if len(list(module.named_children())) > 1:
+            for name, child in module.named_children():
+                lr = custom_lrs.get(name, default_lr)
+                param_groups.append({'params': child.parameters(), 'lr': lr})
+        else:
+            lr = custom_lrs.get(comp_name, default_lr)
+            param_groups.append({'params': module.parameters(), 'lr': lr})
+
     base_params = {k: v for k, v in opt_cfg['params'].items() if k != 'lr'}
     return opt_cls(param_groups, **base_params)
 
@@ -88,7 +90,7 @@ def build_agent(
                 feat_dim = cfg.get('feature_dim', state_dim) 
                 sub_nets[sub_name], _ = build_sequential(layers, feat_dim)
             components[name] = cls(**sub_nets, **cfg.get('params', {}))
-            
+
         # Scenario C: Simple class (e.g., Buffer)
         else:
             components[name] = cls(**cfg.get('params', {}))

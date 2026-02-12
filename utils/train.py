@@ -7,20 +7,20 @@ from .monitor.training_monitor import TrainingMonitor as Monitor
 def train_loop(
     env_name: str,
     agent: BaseAgent,
-    T: int,
-    N: int,
+    iterations: int,
+    episodes: int,
     monitor_mode = 'cli',
 ):
     env = gym.make(env_name)
     monitor = Monitor(
-        env_name, agent.__class__.__name__, T,
+        env_name, agent.__class__.__name__, iterations,
         mode=monitor_mode, window_size=50
     )
 
-    for t in range(1, T + 1):
+    for t in range(1, iterations + 1):
         total_rewards = []
 
-        for _ in range(N):
+        for _ in range(episodes):
             state, _ = env.reset()
             done = False
             total_reward = 0
@@ -39,7 +39,7 @@ def train_loop(
 
         loss = agent.update()
         
-        avg_reward = sum(total_rewards) / N
+        avg_reward = sum(total_rewards) / episodes
         monitor.update(t, avg_reward, loss)
 
     monitor.close()

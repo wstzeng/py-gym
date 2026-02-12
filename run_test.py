@@ -8,7 +8,9 @@ def main(
         episodes: int = 5,
         device: str = "cpu"
 ) -> None:
-    """Run testing from a packed experiment directory."""
+    """
+    Run testing from a packed experiment directory.
+    """
     
     # 1. Load the blueprint and weights from the specific experiment
     config_path = f"{exp_dir}/config.json"

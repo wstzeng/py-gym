@@ -4,14 +4,14 @@ from agent import BaseAgent
 def test_loop(
     env_name: str,
     agent: BaseAgent,
-    T: int = 1000,
-    S: int = 5,
+    episodes: int = 5,
+    max_steps: int = 1000,
 ):
     env = gym.make(env_name, render_mode='human')
     
-    for _ in range(S):
+    for _ in range(episodes):
         state, _ = env.reset()
-        for _ in range(T):
+        for _ in range(max_steps):
             env.render()
             
             # Unpack (action, info) based on the new standardized agent interface

@@ -4,8 +4,9 @@ import torch
 import torch.nn as nn
 import os
 
-class BaseAgent(ABC):
+class BaseAgent(nn.Module, ABC):
     def __init__(self, encoder: nn.Module, device: str = "auto"):
+        super().__init__()
         self.encoder = encoder
         # Device management
         if device == "auto":

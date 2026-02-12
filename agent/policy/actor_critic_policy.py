@@ -5,11 +5,11 @@ class ActorCriticPolicy(BasePolicy):
     """
     Implementation of Actor-Critic architecture inheriting from BasePolicy.
     """
-    def __init__(self, actor_net, critic_net):
+    def __init__(self, actor, critic):
         super().__init__()
         # Use composition to allow different encoders or heads
-        self.actor = actor_net
-        self.critic = critic_net
+        self.actor = actor
+        self.critic = critic
 
     def forward(self, x):
         """
