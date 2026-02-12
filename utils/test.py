@@ -16,7 +16,7 @@ def test_loop(
             
             # Unpack (action, info) based on the new standardized agent interface
             # We only need 'action' for the environment step
-            action, info = agent.select_action(state)
+            action, info = agent.select_action(state, deterministic=True)
 
             state, _, terminated, truncated, _ = env.step(action)
             

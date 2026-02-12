@@ -24,9 +24,25 @@ class BaseAgent(nn.Module, ABC):
             'optimizer': 'optimizer'
         }
 
+    def select_action(
+            self,
+            state: torch.FloatTensor,
+            deterministic: bool = False
+    ):
+        """
+        Inference entry point. 
+        Args:
+            state: current environment observation.
+            deterministic: if True, use max-likelihood action (testing). 
+                        if False, sample from distribution (training).
+        """
+        # We ensure the correct gradient mode here to prevent memory leaks during testing
+        with torch.set_grad_enabled(self.training and not deterministic):
+            return self._select_action_impl(state, deterministic)
 
     @abstractmethod
-    def select_action(self, state):
+    def _select_action_impl(self, state, deterministic):
+        """Hidden implementation to be overridden by child classes."""
         pass
 
     @abstractmethod
@@ -77,4 +93,5 @@ class BaseAgent(nn.Module, ABC):
             if hasattr(self, attr) and key in checkpoint:
                 getattr(self, attr).load_state_dict(checkpoint[key])
         
+        self.eval()
         logger.info(f"[bold blue]Checkpoint loaded[/bold blue] from [cyan]{path}[/cyan]")

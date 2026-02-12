@@ -11,13 +11,16 @@ class ReinforceAgent(BaseAgent):
         self.gamma = gamma
         self.optimizer = optimizer
 
-    def select_action(self, state):
+    def _select_action_impl(self, state, deterministic):
         state_tensor = torch.FloatTensor(state).to(self.device)
         
         features = self.encoder(state_tensor)
         dist = self.policy.get_distribution(features)
         
-        action = dist.sample()
+        if deterministic:
+            action = torch.argmax(dist.probs, dim=-1)
+        else:
+            action = dist.sample()
         
         info = {
             "log_prob": dist.log_prob(action)

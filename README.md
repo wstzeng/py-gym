@@ -1,5 +1,5 @@
 # Py-Gym Framework
-    
+
 An object-oriented reinforcement learning framework focused on modularity and clear separation of concerns.
 
 ## Project Goals

@@ -11,6 +11,7 @@ This roadmap follows parallel development **tracks** to evolve the Py-Gym Framew
 ## Architecture Track (System Design)
 - [x] **OOP Foundation**: Base classes and module hierarchy.
 - [x] **Object Factory**: Config-driven builder logic.
+- [ ] **Agnostic Interface**: (New) Decorator-based Tensor conversion & Space-agnostic (Discrete/Continuous) support.
 - [ ] **Visual Encoders**: CNN support for pixel-based states.
 - [ ] **Generalized Encoders**: Introduce more architecture support.
 - [ ] **MARL**: Architecture support for Multi-Agent systems.
