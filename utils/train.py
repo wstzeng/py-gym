@@ -10,6 +10,7 @@ def train_loop(
         monitor: Dashboard,
 ):
     env = gym.make(env_name)
+    agent.train()
 
     for t in range(1, iterations + 1):
         total_rewards = []
