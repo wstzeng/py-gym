@@ -18,5 +18,7 @@ This roadmap follows parallel development **tracks** to evolve the Py-Gym Framew
 ## Experiment Track (Tooling & Artifacts)
 - [x] **Monitoring**: Real-time CLI and Live monitors.
 - [ ] **Unified Artifacts**: Integrated saving of configs, logs, and ckpt. (In Progress)
-- [ ] **Visualization**: Auto-generation of training reports.
-- [ ] **Manager**: Tooling for experiment archiving and comparison.
+- [ ] **Adaptive Visualizer**: (New) Multi-mode rendering (ASCII-CLI, Matplotlib-GUI, No-Plot).
+- [ ] **Reporting**: Auto-generation of high-res training reports (PDF/PNG) with Z-order trend analysis.
+- [ ] **Lab Manager**: A dedicated tool/CLI for experiment archiving and batch comparison.
+- [ ] **Web Dashboard**: A lightweight web interface (Streamlit or Gradio based) to browse `experiments/` folders and compare curves dynamically.
