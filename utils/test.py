@@ -2,10 +2,10 @@ import gymnasium as gym
 from agent import BaseAgent
 
 def test_loop(
-    env_name: str,
-    agent: BaseAgent,
-    episodes: int = 5,
-    max_steps: int = 1000,
+        env_name: str,
+        agent: BaseAgent,
+        episodes: int = 5,
+        max_steps: int = 1000,
 ):
     env = gym.make(env_name, render_mode='human')
     

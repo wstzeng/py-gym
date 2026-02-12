@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import os
 
+from utils.logger import logger
+
 class BaseAgent(nn.Module, ABC):
     def __init__(self, encoder: nn.Module, device: str = "auto"):
         super().__init__()
@@ -56,14 +58,14 @@ class BaseAgent(nn.Module, ABC):
             checkpoint['optimizer'] = self.optimizer.state_dict()
 
         torch.save(checkpoint, path)
-        print(f"[*] Checkpoint saved to {path}")
+        logger.info(f"[bold green]Checkpoint saved[/bold green] to [cyan]{path}[/cyan]")
 
     def load_checkpoints(self, path: str):
         """
         Generic load method that restores state for all present components.
         """
         if not os.path.exists(path):
-            print(f"[!] Checkpoint not found at {path}")
+            logger.warning(f"Checkpoint not found at {path}")
             return
 
         checkpoint = torch.load(path, map_location=self.device)
@@ -75,4 +77,4 @@ class BaseAgent(nn.Module, ABC):
             if hasattr(self, attr) and key in checkpoint:
                 getattr(self, attr).load_state_dict(checkpoint[key])
         
-        print(f"[*] Checkpoint loaded from {path}")
+        logger.info(f"[bold blue]Checkpoint loaded[/bold blue] from [cyan]{path}[/cyan]")

@@ -2,6 +2,7 @@ import json
 import argparse
 from utils.builder import build_agent
 from utils.test import test_loop
+from utils.logger import logger
 
 def main(
         exp_dir: str,
@@ -26,7 +27,7 @@ def main(
     agent.load_checkpoints(ckpt_path)
     
     # 4. Execute test
-    print(f"Testing model from {exp_dir} on {config_dict['env_id']}...")
+    logger.info(f"Testing model from {exp_dir} on {config_dict['env_id']}...")
     test_loop(
         env_name=config_dict['env_id'], 
         agent=agent, 

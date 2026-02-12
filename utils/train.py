@@ -1,21 +1,15 @@
-# utils/train.py
 import gymnasium as gym
-import torch
 from agent import BaseAgent
-from .monitor.training_monitor import TrainingMonitor as Monitor
+from utils.logger import Dashboard
 
 def train_loop(
-    env_name: str,
-    agent: BaseAgent,
-    iterations: int,
-    episodes: int,
-    monitor_mode = 'cli',
+        env_name: str,
+        agent: BaseAgent,
+        iterations: int,
+        episodes: int,
+        monitor: Dashboard,
 ):
     env = gym.make(env_name)
-    monitor = Monitor(
-        env_name, agent.__class__.__name__, iterations,
-        mode=monitor_mode, window_size=50
-    )
 
     for t in range(1, iterations + 1):
         total_rewards = []
@@ -37,10 +31,11 @@ def train_loop(
 
             total_rewards.append(total_reward)
 
+        # Update Agent
         loss = agent.update()
         
+        # Update Monitor
         avg_reward = sum(total_rewards) / episodes
         monitor.update(t, avg_reward, loss)
 
-    monitor.close()
     env.close()
