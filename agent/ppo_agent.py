@@ -1,7 +1,7 @@
 import torch
-import torch.nn as nn
 import numpy as np
 from .base_agent import BaseAgent
+from utils.torch_utils import state_to_tensor
 
 class PPOAgent(BaseAgent):
     def __init__(
@@ -20,10 +20,10 @@ class PPOAgent(BaseAgent):
         self.critic_weight = critic_weight
         self.entropy_weight = entropy_weight
 
+    @state_to_tensor
     def _select_action_impl(self, state, deterministic):
         # Policy inference and metadata collection
-        state_tensor = torch.FloatTensor(state).to(self.device)
-        features = self.encoder(state_tensor)
+        features = self.encoder(state)
         
         # Consistent with ActorCritic: needs state for PPO re-evaluation
         logits, value = self.policy(features)

@@ -1,5 +1,6 @@
 import torch
 from .base_agent import BaseAgent
+from utils.torch_utils import state_to_tensor
 
 class ActorCriticAgent(BaseAgent):
     def __init__(
@@ -11,10 +12,9 @@ class ActorCriticAgent(BaseAgent):
         self.gamma = gamma
         self.optimizer = optimizer
 
-    def _select_action_impl(self, state, deterministic):
-        state_tensor = torch.FloatTensor(state).to(self.device)
-        
-        features = self.encoder(state_tensor)
+    @state_to_tensor
+    def _select_action_impl(self, state, deterministic):        
+        features = self.encoder(state)
         
         logits, value = self.policy(features)
         
