@@ -1,42 +1,48 @@
 # Py-Gym Framework
-
+    
 An object-oriented reinforcement learning framework focused on modularity and clear separation of concerns.
 
 ## Project Goals
 
 - **Architecture Scalability**: Leveraging OOP principles to build a scalable hierarchy for diverse RL algorithms.
-- **Algorithmic Clarity**: Implementing core RL methods (Policy Gradient, Actor-Critic) with readable, well-structured code.
+- **Reproducibility**: Automatic experiment tracking with integrated configs, logs, and checkpoints.
+- **Algorithmic Clarity**: Implementing core RL methods with readable, well-structured code.
 
 ## Architecture & Module Responsibilities
 
-The framework follows a strict modular design where each component has a single responsibility:
+The framework follows a strict modular design:
 
 - **[Agent](agent/)**: Orchestrates decision-making and learning.
     - **[Policy](agent/policy)**: Neural network architectures and action selection logic.
     - **[Buffer](agent/buffer)**: Experience replay or rollout storage management.
     - **[Encoder](agent/encoder)**: State representation learning and feature extraction.
-- **[Envs](envs/)**: Standardized interaction wrappers for Gymnasium environments.
-- **[Utils](utils/)**: Training utilities including the decoupled `TrainingMonitor` and logging systems.
+- **[Utils](utils/)**: Decoupled training logic, logging systems, and object builders.
 
+## Experiment Management
 
+Every training run generates a self-contained directory in `experiments/`:
 
-## Roadmap
-
-- [x] Base Infrastructure (OOP Core & Logging)
-- [x] REINFORCE Implementation
-- [x] Actor-Critic (Advantage-based learning)
-- [x] PPO (Proximal Policy Optimization)
-
-## Setup
-
-```bash
-poetry install
-poetry run python envs/lunar/main.py # example: lunar lander
+```text
+experiments/ENV_TIMESTAMP/
+├── config.json       # Full configuration (arch + runtime params)
+├── model.ckpt        # Trained weights (nn.Module state_dict)
+├── training_log.csv  # Step-by-step metrics (Reward, Loss)
+└── training_log.png  # Visualized performance curve
 ```
 
-## [Dependencies](pyproject.toml)
+## Setup & Usage
 
-- Python 3.10+
-- PyTorch
-- Gymnasium
-- Poetry
+```bash
+# Install dependencies
+poetry install
+
+# Train an agent
+poetry run python run_train.py experiments/lunar/ppo.json --iterations 500 --episodes 10
+
+# Test a trained model
+poetry run python run_test.py experiments/ENV_TIMESTAMP/
+```
+
+## Project Status
+
+For the latest development progress and future plans, please see the **[Roadmap](Roadmap.md)**.
