@@ -20,7 +20,7 @@ class PPOAgent(BaseAgent):
         self.critic_weight = critic_weight
         self.entropy_weight = entropy_weight
 
-    def select_action(self, state):
+    def _select_action_impl(self, state, deterministic):
         # Policy inference and metadata collection
         state_tensor = torch.FloatTensor(state).to(self.device)
         features = self.encoder(state_tensor)
@@ -28,10 +28,13 @@ class PPOAgent(BaseAgent):
         # Consistent with ActorCritic: needs state for PPO re-evaluation
         logits, value = self.policy(features)
         dist = torch.distributions.Categorical(logits=logits)
-        action = dist.sample()
+        if deterministic:
+            action = torch.argmax(dist.probs, dim=-1)
+        else:
+            action = dist.sample()
         
         info = {
-            "state": state, # Required for PPO re-forwarding
+            "state": state,
             "action": action.item(),
             "log_prob": dist.log_prob(action).detach(),
             "value": value.detach()

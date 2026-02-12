@@ -11,7 +11,7 @@ class ActorCriticAgent(BaseAgent):
         self.gamma = gamma
         self.optimizer = optimizer
 
-    def select_action(self, state):
+    def _select_action_impl(self, state, deterministic):
         state_tensor = torch.FloatTensor(state).to(self.device)
         
         features = self.encoder(state_tensor)
@@ -19,8 +19,10 @@ class ActorCriticAgent(BaseAgent):
         logits, value = self.policy(features)
         
         dist = torch.distributions.Categorical(logits=logits)
-        action = dist.sample()
-        
+        if deterministic:
+            action = torch.argmax(dist.probs, dim=-1)
+        else:
+            action = dist.sample()
         info = {
             "log_prob": dist.log_prob(action),
             "value": value

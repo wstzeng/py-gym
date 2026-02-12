@@ -20,6 +20,7 @@ venv/
 log/
 checkpoints/
 backup/
+experiments/
 *.log
 *.tar
 *.tar.gz

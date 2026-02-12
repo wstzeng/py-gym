@@ -4,8 +4,11 @@ import torch
 import torch.nn as nn
 import os
 
-class BaseAgent(ABC):
+from utils.logger import logger
+
+class BaseAgent(nn.Module, ABC):
     def __init__(self, encoder: nn.Module, device: str = "auto"):
+        super().__init__()
         self.encoder = encoder
         # Device management
         if device == "auto":
@@ -21,9 +24,25 @@ class BaseAgent(ABC):
             'optimizer': 'optimizer'
         }
 
+    def select_action(
+            self,
+            state: torch.FloatTensor,
+            deterministic: bool = False
+    ):
+        """
+        Inference entry point. 
+        Args:
+            state: current environment observation.
+            deterministic: if True, use max-likelihood action (testing). 
+                        if False, sample from distribution (training).
+        """
+        # We ensure the correct gradient mode here to prevent memory leaks during testing
+        with torch.set_grad_enabled(self.training and not deterministic):
+            return self._select_action_impl(state, deterministic)
 
     @abstractmethod
-    def select_action(self, state):
+    def _select_action_impl(self, state, deterministic):
+        """Hidden implementation to be overridden by child classes."""
         pass
 
     @abstractmethod
@@ -55,14 +74,14 @@ class BaseAgent(ABC):
             checkpoint['optimizer'] = self.optimizer.state_dict()
 
         torch.save(checkpoint, path)
-        print(f"[*] Checkpoint saved to {path}")
+        logger.info(f"[bold green]Checkpoint saved[/bold green] to [cyan]{path}[/cyan]")
 
     def load_checkpoints(self, path: str):
         """
         Generic load method that restores state for all present components.
         """
         if not os.path.exists(path):
-            print(f"[!] Checkpoint not found at {path}")
+            logger.warning(f"Checkpoint not found at {path}")
             return
 
         checkpoint = torch.load(path, map_location=self.device)
@@ -74,4 +93,5 @@ class BaseAgent(ABC):
             if hasattr(self, attr) and key in checkpoint:
                 getattr(self, attr).load_state_dict(checkpoint[key])
         
-        print(f"[*] Checkpoint loaded from {path}")
+        self.eval()
+        logger.info(f"[bold blue]Checkpoint loaded[/bold blue] from [cyan]{path}[/cyan]")
