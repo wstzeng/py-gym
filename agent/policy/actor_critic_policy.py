@@ -1,12 +1,11 @@
 from .base_policy import BasePolicy
-from torch.distributions import Categorical
 
 class ActorCriticPolicy(BasePolicy):
     """
     Implementation of Actor-Critic architecture inheriting from BasePolicy.
     """
-    def __init__(self, actor, critic):
-        super().__init__()
+    def __init__(self, actor, critic, distributor):
+        super().__init__(distributor)
         # Use composition to allow different encoders or heads
         self.actor = actor
         self.critic = critic
@@ -22,7 +21,7 @@ class ActorCriticPolicy(BasePolicy):
         Convenience method if only action is needed.
         """
         logits = self.actor(x)
-        return Categorical(logits=logits)
+        return self.distributor(logits)
 
     def get_value(self, x):
         """

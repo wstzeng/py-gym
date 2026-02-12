@@ -5,7 +5,9 @@ from utils.torch_utils import state_to_tensor
 class ReinforceAgent(BaseAgent):
     def __init__(
             self, encoder, policy, buffer, optimizer,
-            gamma=0.99, device="auto"):
+            device="auto", gamma=0.99,
+            **kwargs
+    ):
         super().__init__(encoder, device=device)
         self.policy = policy.to(self.device)
         self.buffer = buffer
