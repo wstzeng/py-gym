@@ -24,20 +24,10 @@ class BaseAgent(nn.Module, ABC):
             'optimizer': 'optimizer'
         }
 
-    def select_action(
-            self,
-            state: torch.FloatTensor,
-            deterministic: bool = False
-    ):
-        """
-        Inference entry point. 
-        Args:
-            state: current environment observation.
-            deterministic: if True, use max-likelihood action (testing). 
-                        if False, sample from distribution (training).
-        """
-        # We ensure the correct gradient mode here to prevent memory leaks during testing
-        with torch.set_grad_enabled(self.training and not deterministic):
+    def select_action(self, state, deterministic: bool = False):
+        is_inference = not self.training or deterministic
+        
+        with torch.set_grad_enabled(not is_inference):
             return self._select_action_impl(state, deterministic)
 
     @abstractmethod
