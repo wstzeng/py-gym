@@ -8,8 +8,10 @@ def train_loop(
         iterations: int,
         episodes: int,
         monitor: Dashboard,
+        env_kwargs: dict = None
 ):
-    env = gym.make(env_name)
+    kwargs = env_kwargs or {}
+    env = gym.make(env_name, **kwargs)
     agent.train()
 
     for t in range(1, iterations + 1):
@@ -32,10 +34,8 @@ def train_loop(
 
             total_rewards.append(total_reward)
 
-        # Update Agent
         loss = agent.update()
         
-        # Update Monitor
         avg_reward = sum(total_rewards) / episodes
         monitor.update(t, avg_reward, loss)
 

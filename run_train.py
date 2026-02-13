@@ -18,6 +18,8 @@ def main(
 ) -> None:
     # 1. Load config and inject runtime parameters
     config = AgentConfig.load(config_path)
+    config_dict = asdict(config)
+    env_configs = config_dict.get('env_configs', {})
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     config.metadata = {
@@ -44,7 +46,7 @@ def main(
         agent_name=agent.__class__.__name__,
         total_iterations=iterations,
         save_dir=save_dir,
-        modes=monitor_modes
+        modes=monitor_modes,
     )
 
     # 5. Execution
@@ -55,7 +57,8 @@ def main(
             agent=agent,
             iterations=iterations,
             episodes=episodes,
-            monitor=monitor
+            monitor=monitor,
+            env_kwargs=env_configs.get('train'),
         )
     except KeyboardInterrupt:
         logger.error("\nTraining interrupted by user. Packing current artifacts...")
@@ -64,11 +67,15 @@ def main(
         agent.save_checkpoints(os.path.join(save_dir, "model.ckpt"))
         config.save(os.path.join(save_dir, "config.json"))
         monitor.close()
-        
+
         logger.info(f"Experiment artifacts packed into: {save_dir}")
 
     # 7. Immediate test run
-    test_loop(env_name=config.env_id, agent=agent)
+    test_loop(
+        env_name=config.env_id,
+        agent=agent,
+        env_kwargs=env_configs.get('test'),
+    )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train and pack RL experiments.")
@@ -77,12 +84,12 @@ if __name__ == '__main__':
     parser.add_argument('-N', '--episodes', type=int, default=10)
     parser.add_argument('--device', type=str, default='cpu')
     parser.add_argument('--monitor', nargs='+', default=['cli', 'live', 'file'])
-    
+
     args = parser.parse_args()
     main(
-        config_path=args.config, 
-        iterations=args.iterations, 
-        episodes=args.episodes, 
+        config_path=args.config,
+        iterations=args.iterations,
+        episodes=args.episodes,
         device=args.device,
         monitor_modes=args.monitor
     )
