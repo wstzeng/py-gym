@@ -40,13 +40,13 @@ def build_optimizer(
 
     for comp_name, module in agent_components.items():
         lr = custom_lrs.get(comp_name, default_lr)
-        
+
         params_to_add = []
         for p in module.parameters():
             if p not in seen_params:
                 params_to_add.append(p)
                 seen_params.add(p)
-        
+
         if params_to_add:
             param_groups.append({'params': params_to_add, 'lr': lr})
 
@@ -62,7 +62,7 @@ def build_agent(
 
     for name, cfg in config_dict['components'].items():
         cls_type = cfg['type']
-        
+
         cls = globals().get(cls_type)
         if cls is None:
             raise ValueError(f"Class {cls_type} not found in globals.")
@@ -71,21 +71,21 @@ def build_agent(
         if 'layers' in cfg:
             input_dim = cfg.get('input_dim', state_dim)
             net, out_dim = build_sequential(cfg['layers'], input_dim)
-            
+
             params = cfg.get('params', {})
             if 'feature_dim' not in params:
                 params['feature_dim'] = out_dim
-                
+
             components[name] = cls(network=net, **params)
 
         # --- Scenario B: Complex Policies (Actor-Critic / Actor) ---
         elif 'sub_networks' in cfg:
             sub_nets = {}
             feat_dim = cfg.get('feature_dim')
-            
+
             for sub_name, layers in cfg['sub_networks'].items():
                 sub_nets[sub_name], _ = build_sequential(layers, feat_dim)
-            
+
             params = cfg.get('params', {}).copy()
             for p_name, p_val in params.items():
                 if isinstance(p_val, str) and p_val in components:
