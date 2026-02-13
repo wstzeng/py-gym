@@ -1,9 +1,9 @@
 from .base_policy import BasePolicy
 
 class ValuePolicy(BasePolicy):
-    def __init__(self, net):
+    def __init__(self, critic):
         super().__init__(None)
-        self.net = net
+        self.critic = critic
 
     def forward(self, x):
         return self.net(x)

@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from .base_agent import BaseAgent
 from utils.torch_utils import state_to_tensor
 
@@ -26,8 +25,8 @@ class PPOAgent(BaseAgent):
         features = self.encoder(state)
         dist = self.policy.get_distribution(features)
         raw_action = dist.mode if deterministic else dist.sample()
-        
-        action_for_buffer = np.atleast_1d(raw_action.detach().cpu().numpy())
+
+        action_for_buffer = torch.atleast_1d(raw_action.detach().cpu())
 
         info = {
             "state": state,
@@ -35,7 +34,7 @@ class PPOAgent(BaseAgent):
             "log_prob": dist.log_prob(raw_action).sum().detach().item(),
             "value": self.policy.get_value(features).detach().item()
         }
-        
+
         return self.policy.distributor.post_process(raw_action), info
 
     def record(self, info, reward, done):
@@ -43,12 +42,20 @@ class PPOAgent(BaseAgent):
 
     def update(self):
         data = self.buffer.get_data(self.device)
-        old_states, old_actions, old_log_probs, old_values, rewards, dones = data
+        if not data: return 0.0
+
+        old_states = data["states"]
+        old_actions = data["actions"]
+        old_log_probs = data["log_probs"]
+        old_values = data["values"]
+        rewards = data["rewards"]
+        dones = data["dones"]
+
         if old_states.size(0) == 0: return 0.0
 
         # GAE
         advantages = []
-        last_gae, next_value = 0, 0 
+        last_gae, next_value = 0, 0
         for r, d, v in zip(reversed(rewards), reversed(dones), reversed(old_values)):
             delta = r + self.gamma * next_value * (1 - d) - v.item()
             gae = delta + self.gamma * self.gae_lambda * (1 - d) * last_gae
@@ -59,29 +66,31 @@ class PPOAgent(BaseAgent):
         returns = advantages + old_values
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
+        # K-epochs update
         total_loss = 0
         for _ in range(self.k_epochs):
             features = self.encoder(old_states)
             dist = self.policy.get_distribution(features)
             curr_values = self.policy.get_value(features).view(-1)
-            
+
             if isinstance(dist, torch.distributions.Categorical):
                 curr_log_probs = dist.log_prob(old_actions.view(-1))
             else:
                 curr_log_probs = dist.log_prob(old_actions).sum(dim=-1)
-            
+
             curr_log_probs = curr_log_probs.view(-1)
             entropy = dist.entropy().mean()
 
+            # PPO Clipping
             ratio = torch.exp(curr_log_probs - old_log_probs)
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
-            
+
             actor_loss = -torch.min(surr1, surr2).mean()
             critic_loss = torch.nn.functional.smooth_l1_loss(curr_values, returns)
-            
+
             loss = actor_loss + self.critic_weight * critic_loss - self.entropy_weight * entropy
-            
+
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
