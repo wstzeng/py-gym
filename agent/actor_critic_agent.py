@@ -4,64 +4,71 @@ from utils.torch_utils import state_to_tensor
 
 class ActorCriticAgent(BaseAgent):
     def __init__(
-            self, encoder, policy, buffer, optimizer, device="auto", 
-            gamma=0.99,
+            self, encoder, policy, buffer, optimizer, device="auto",
+            gamma=0.99, critic_weight=0.5, entropy_weight=0.01,
             **kwargs
     ):
         super().__init__(encoder, device=device)
         self.policy = policy.to(self.device)
         self.buffer = buffer
-        self.gamma = gamma
         self.optimizer = optimizer
+        self.gamma = gamma
+        self.critic_weight = critic_weight
+        self.entropy_weight = entropy_weight
 
     @state_to_tensor
-    def _select_action_impl(self, state, deterministic):        
+    def _select_action_impl(self, state, deterministic):
         features = self.encoder(state)
-        
-        logits, value = self.policy(features)
-        
-        dist = torch.distributions.Categorical(logits=logits)
-        if deterministic:
-            action = torch.argmax(dist.probs, dim=-1)
-        else:
-            action = dist.sample()
+        dist = self.policy.get_distribution(features)
+        raw_action = dist.mode if deterministic else dist.sample()
+
+        action_for_buffer = torch.atleast_1d(raw_action.detach().cpu())
+
         info = {
-            "log_prob": dist.log_prob(action),
-            "value": value
+            "state": state,
+            "action": action_for_buffer,
+            "log_prob": dist.log_prob(raw_action).sum().detach().item(),
+            "value": self.policy.get_value(features).detach().item()
         }
-        
-        return action.item(), info
+
+        return self.policy.distributor.post_process(raw_action), info
 
     def record(self, info, reward, done):
-        self.buffer.store(
-            log_prob=info["log_prob"],
-            value=info["value"],
-            reward=reward,
-            done=done
-        )
+        self.buffer.store(info, reward, done)
 
     def update(self):
-        log_probs, values, rewards, dones = self.buffer.get_data()
-        if not log_probs:
-            return 0.0
+        data = self.buffer.get_data(self.device)
+        if not data: return 0.0
+
+        old_states = data["states"]
+        old_actions = data["actions"]
+        rewards = data["rewards"]
+        dones = data["dones"]
 
         returns = []
         g = 0
         for r, d in zip(reversed(rewards), reversed(dones)):
             g = r + self.gamma * g * (1 - d)
             returns.insert(0, g)
+        returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
 
-        returns = torch.tensor(returns, dtype=torch.float32).to(self.device)
-        log_probs = torch.stack(log_probs)
-        values = torch.stack(values).squeeze()  # From [T, 1] to [T]
-        
-        advantages = (returns - values.detach())
+        features = self.encoder(old_states)
+        dist = self.policy.get_distribution(features)
+        curr_values = self.policy.get_value(features).view(-1)
+
+        if isinstance(dist, torch.distributions.Categorical):
+            curr_log_probs = dist.log_prob(old_actions.view(-1))
+        else:
+            curr_log_probs = dist.log_prob(old_actions).sum(dim=-1)
+
+        advantages = returns - curr_values.detach()
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        
-        actor_loss = -(log_probs * advantages).mean()
-        critic_loss = torch.nn.functional.smooth_l1_loss(values, returns)
-        
-        loss = actor_loss + 0.1 * critic_loss
+
+        actor_loss = -(curr_log_probs.view(-1) * advantages).mean()
+        critic_loss = torch.nn.functional.smooth_l1_loss(curr_values, returns)
+        entropy = dist.entropy().mean()
+
+        loss = actor_loss + self.critic_weight * critic_loss - self.entropy_weight * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
