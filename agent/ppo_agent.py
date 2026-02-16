@@ -4,9 +4,19 @@ from utils.torch_utils import state_to_tensor
 
 class PPOAgent(BaseAgent):
     def __init__(
-            self, encoder, policy, buffer, optimizer, device="auto",
-            eps_clip=0.2, gamma=0.99, k_epochs=10, critic_weight=0.5,
-            entropy_weight=0.01, gae_lambda=0.95,
+            self,
+            encoder, 
+            policy, 
+            buffer, 
+            optimizer, 
+            device="auto",
+            eps_clip=0.2, 
+            gamma=0.99, 
+            k_epochs=10, 
+            critic_weight=0.5,
+            entropy_weight=0.01, 
+            gae_lambda=0.95,
+            critic_loss=None,
             **kwargs
     ):
         super().__init__(encoder, device=device)
@@ -19,6 +29,7 @@ class PPOAgent(BaseAgent):
         self.k_epochs = k_epochs
         self.critic_weight = critic_weight
         self.entropy_weight = entropy_weight
+        self.critic_loss_fn = critic_loss if critic_loss else torch.nn.SmoothL1Loss()
 
     @state_to_tensor
     def _select_action_impl(self, state, deterministic):
@@ -87,7 +98,7 @@ class PPOAgent(BaseAgent):
             surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
 
             actor_loss = -torch.min(surr1, surr2).mean()
-            critic_loss = torch.nn.functional.smooth_l1_loss(curr_values, returns)
+            critic_loss = self.critic_loss_fn(curr_values, returns)
 
             loss = actor_loss + self.critic_weight * critic_loss - self.entropy_weight * entropy
 
