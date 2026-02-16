@@ -4,8 +4,16 @@ from utils.torch_utils import state_to_tensor
 
 class ActorCriticAgent(BaseAgent):
     def __init__(
-            self, encoder, policy, buffer, optimizer, device="auto",
-            gamma=0.99, critic_weight=0.5, entropy_weight=0.01,
+            self,
+            encoder,
+            policy,
+            buffer,
+            optimizer,
+            device="auto",
+            gamma=0.99,
+            critic_weight=0.5,
+            entropy_weight=0.01,
+            critic_loss=None,
             **kwargs
     ):
         super().__init__(encoder, device=device)
@@ -15,6 +23,7 @@ class ActorCriticAgent(BaseAgent):
         self.gamma = gamma
         self.critic_weight = critic_weight
         self.entropy_weight = entropy_weight
+        self.critic_loss_fn = critic_loss if critic_loss else torch.nn.SmoothL1Loss()
 
     @state_to_tensor
     def _select_action_impl(self, state, deterministic):
@@ -65,7 +74,7 @@ class ActorCriticAgent(BaseAgent):
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         actor_loss = -(curr_log_probs.view(-1) * advantages).mean()
-        critic_loss = torch.nn.functional.smooth_l1_loss(curr_values, returns)
+        critic_loss = self.critic_loss_fn(curr_values, returns)
         entropy = dist.entropy().mean()
 
         loss = actor_loss + self.critic_weight * critic_loss - self.entropy_weight * entropy

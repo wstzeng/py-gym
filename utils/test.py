@@ -9,7 +9,7 @@ def test_loop(
         env_kwargs: dict = None
 ):
     kwargs = env_kwargs or {}
-    env = gym.make(env_name, render_mode='human', **kwargs)
+    env = gym.make(env_name, **kwargs)
 
     for _ in range(episodes):
         state, _ = env.reset()
