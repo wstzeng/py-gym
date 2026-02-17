@@ -1,0 +1,71 @@
+{
+    "env": {
+        "id": "CartPole-v1",
+        "state_dim": 4,
+        "default": {},
+        "training": {},
+        "testing": {
+            "render_mode": "human"
+        }
+    },
+    "agent": {
+        "type": "PPOAgent",
+        "components": {
+            "encoder": {
+                "type": "VectorEncoder",
+                "layers": [
+                    {
+                        "type": "Linear",
+                        "out_features": 32
+                    },
+                    {
+                        "type": "LeakyReLU"
+                    }
+                ]
+            },
+            "policy": {
+                "type": "ActorCriticPolicy",
+                "feature_dim": 32,
+                "components": {
+                    "actor": [
+                        {
+                            "type": "Linear",
+                            "out_features": 2
+                        }
+                    ],
+                    "critic": [
+                        {"type": "Linear", "out_features": 64},
+                        {"type": "LeakyReLU"},
+                        {"type": "Linear", "out_features": 32},
+                        {"type": "LeakyReLU"},
+                        {"type": "Linear", "out_features": 1}
+                    ],
+                    "distributor": {
+                        "type": "CategoricalDist",
+                        "params": {}
+                    }
+                }
+            },
+            "buffer": {
+                "type": "TrajectoryBuffer"
+            }
+        }
+    },
+    "hyper_params": {
+        "optimizer": {
+            "type": "AdamW",
+            "lrs": {
+                "default": 1e-3,
+                "critic": 1e-4
+            },
+            "weight_decay": 1e-2
+        },
+        "eps_clip": 0.2,
+        "k_epochs": 10,
+        "entropy_weight": 0.01,
+        "gamma": 0.99,
+        "criterion": {
+            "critic_loss": "MSELoss"
+        }
+    }
+}
