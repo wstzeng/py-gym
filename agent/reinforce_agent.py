@@ -31,7 +31,9 @@ class ReinforceAgent(BaseAgent):
     def update(self):
         data = self.buffer.get_data(self.device)
         if not data:
-            return 0.0
+            return {}
+
+        self.tracker.reset()
 
         rewards = data["rewards"]
         # Calculate discounted returns
@@ -60,5 +62,7 @@ class ReinforceAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
 
+        self.tracker.store(loss=loss)
+
         self.buffer.clear()
-        return loss.item()
+        return self.tracker.result()

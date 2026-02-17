@@ -7,6 +7,24 @@ import os
 from .buffer import BaseBuffer
 from utils.logger import logger
 
+class MetricTracker:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self._data = {}
+
+    def store(self, **metrics):
+        """Standardize metric storage: detach and move to CPU."""
+        for k, v in metrics.items():
+            if k not in self._data: self._data[k] = []
+            val = v.item() if torch.is_tensor(v) else v
+            self._data[k].append(val)
+
+    def result(self) -> dict:
+        """Calculate mean for all tracked metrics."""
+        return {k: sum(v) / len(v) for k, v in self._data.items() if v}
+
 class BaseAgent(nn.Module, ABC):
     def __init__(
             self,
@@ -24,6 +42,7 @@ class BaseAgent(nn.Module, ABC):
         self.buffer = buffer
         self.optimizer = optimizer
         self.continuous = continuous
+        self.tracker = MetricTracker()
 
     def __repr__(self):
         lines = [f"[{self.__class__.__name__}]"]
@@ -86,6 +105,10 @@ class BaseAgent(nn.Module, ABC):
                 return action.item()
             except RuntimeError:
                 return action.squeeze(0).numpy()
+
+    @abstractmethod
+    def update(self):
+        pass
 
     @abstractmethod
     def _select_action_impl(self, state, deterministic):

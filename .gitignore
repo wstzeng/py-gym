@@ -20,7 +20,6 @@ venv/
 log/
 checkpoints/
 backup/
-experiments/
 *.log
 *.tar
 *.tar.gz
@@ -38,3 +37,17 @@ Thumbs.db
 
 # Tests
 tests/
+
+# Experiments and temporary artifacts
+experiments/
+/tmp/pygym_*/
+
+# Configurations
+# Ignore working drafts but keep templates and stable recipes
+configs/draft/
+
+# Ensure templates and stable configs are tracked
+!configs/templates/
+!configs/stable/
+!configs/templates/*.json
+!configs/stable/*.json

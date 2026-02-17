@@ -37,7 +37,9 @@ class ActorCriticAgent(BaseAgent):
         """Standard Actor-Critic update logic."""
         data = self.buffer.get_data(self.device)
         if not data:
-            return 0.0
+            return {}
+
+        self.tracker.reset()
 
         rewards, dones, old_values = data["rewards"], data["dones"], data["values"]
 
@@ -74,5 +76,12 @@ class ActorCriticAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
 
+        self.tracker.store(
+            loss=loss,
+            actor=actor_loss,
+            critic=critic_loss,
+            entropy=entropy
+        )
+
         self.buffer.clear()
-        return loss.item()
+        return self.tracker.result()

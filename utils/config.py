@@ -1,6 +1,6 @@
 import os
 import json
-from dataclasses import dataclass, asdict, field, fields
+from dataclasses import dataclass, asdict, field
 
 @dataclass
 class EnvConfig:

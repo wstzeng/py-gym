@@ -22,7 +22,7 @@ class PPOAgent(ActorCriticAgent):
         """PPO Update logic using self.cfg parameters."""
         data = self.buffer.get_data(self.device)
         if not data or data["states"].size(0) == 0:
-            return 0.0
+            return {}
 
         old_states = data["states"]
         old_actions = data["actions"]
@@ -31,6 +31,7 @@ class PPOAgent(ActorCriticAgent):
         rewards = data["rewards"]
         dones = data["dones"]
 
+        self.tracker.reset()
         # Generalized Advantage Estimation (GAE)
         advantages = []
         last_gae, next_value = 0, 0
@@ -73,5 +74,12 @@ class PPOAgent(ActorCriticAgent):
             self.optimizer.step()
             total_loss += loss.item()
 
+            self.tracker.store(
+                loss=loss,
+                policy=actor_loss,
+                value=critic_loss,
+                entropy=entropy
+            )
+
         self.buffer.clear()
-        return total_loss / self.cfg.k_epochs
+        return self.tracker.result()

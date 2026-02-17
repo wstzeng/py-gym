@@ -7,7 +7,7 @@ def train_loop(
         agent: BaseAgent,
         iterations: int,
         episodes: int,
-        monitor: Dashboard,
+        dashboard: Dashboard = None,
         env_kwargs: dict = None
 ):
     kwargs = env_kwargs or {}
@@ -26,17 +26,19 @@ def train_loop(
                 action, info = agent.select_action(state)
                 next_state, reward, terminated, truncated, _ = env.step(action)
                 done = terminated or truncated
-                
+
                 agent.record(info, reward, done)
-                
+
                 state = next_state
                 total_reward += reward
 
             total_rewards.append(total_reward)
 
-        loss = agent.update()
-        
+        loss_metrics = agent.update()
+
         avg_reward = sum(total_rewards) / episodes
-        monitor.update(t, avg_reward, loss)
+
+        if dashboard:
+            dashboard.update(t, avg_reward, **loss_metrics)
 
     env.close()
