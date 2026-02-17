@@ -4,6 +4,7 @@ from agent.policy import *
 from agent.policy.distributors import *
 from agent import *
 from agent.buffer import *
+from utils.logger import logger
 
 def build_sequential(
         layer_configs: list,
@@ -88,44 +89,66 @@ def get_criterion(name: str):
     cls = getattr(nn, name, None)
     return cls() if cls else None
 
+def build_component(
+        cfg: dict,
+        input_dim: int = None
+) -> any:
+    """Recursively builds components from configuration."""
+    cls_type = cfg.get('type')
+    cls = globals().get(cls_type)
+
+    if cls is None:
+        raise ValueError(f"Class {cls_type} not found in globals.")
+
+    # Type A: Components with networks (Encoder, Actor/Critic, etc.)
+    if 'layers' in cfg:
+        in_dim = cfg.get('input_dim', input_dim)
+        net, out_dim = build_sequential(cfg['layers'], in_dim)
+
+        params = cfg.get('params', {}).copy()
+        if 'feature_dim' not in params:
+            params['feature_dim'] = out_dim
+
+        return cls(network=net, **params)
+
+    # Type B: Components with sub-components (Policy)
+    elif 'components' in cfg:
+        sub_components = {}
+        feat_dim = cfg.get('feature_dim', input_dim)
+
+        for sub_name, sub_cfg in cfg['components'].items():
+            if isinstance(sub_cfg, list):
+                sub_net, _ = build_sequential(sub_cfg, feat_dim)
+                sub_components[sub_name] = sub_net
+            else:
+                sub_components[sub_name] = build_component(sub_cfg, input_dim=feat_dim)
+
+        params = cfg.get('params', {}).copy()
+        return cls(**sub_components, **params)
+
+    # Type C: Simple Components (Buffer, Distributor)
+    else:
+        params = cfg.get('params', {}).copy()
+        return cls(**params)
+
 def build_agent(
         config_dict: dict,
         device: str = 'cpu'
 ) -> BaseAgent:
-    # --- Part 1: Components (Encoder, Policy, Buffer) ---
+    # --- Part 1: Recursive Component Building ---
     state_dim = config_dict['env']['state_dim']
     components = {}
 
     for name, cfg in config_dict['agent']['components'].items():
-        cls_type = cfg['type']
-        cls = globals().get(cls_type)
-        if 'layers' in cfg:
-            input_dim = cfg.get('input_dim', state_dim)
-            net, out_dim = build_sequential(cfg['layers'], input_dim)
-            params = cfg.get('params', {})
-            if 'feature_dim' not in params: params['feature_dim'] = out_dim
-            components[name] = cls(network=net, **params)
-        elif 'components' in cfg:
-            sub_components = {}
-            feat_dim = cfg.get('feature_dim')
-            for sub_name, sub_cfg in cfg['components'].items():
-                if isinstance(sub_cfg, list):
-                    sub_net, _ = build_sequential(sub_cfg, feat_dim)
-                    sub_components[sub_name] = sub_net
-                elif isinstance(sub_cfg, dict) and 'type' in sub_cfg:
-                    sub_cls = globals().get(sub_cfg['type'])
-                    sub_components[sub_name] = sub_cls(**sub_cfg.get('params', {}))
-            components[name] = cls(**sub_components, **cfg.get('params', {}))
-        else:
-            components[name] = cls(**cfg.get('params', {}))
+        components[name] = build_component(cfg, input_dim=state_dim)
 
-    # --- Part 2: Optimizer ---
+    # --- Part 2 & 3: Optimizer & Hyper-params ---
     trainable_modules = {k: v for k, v in components.items() if isinstance(v, nn.Module)}
     optimizer = build_optimizer(config_dict, trainable_modules)
 
-    # --- Part 3: Hyper-parameters & Criterion ---
     hyper_params = config_dict.get('hyper_params', {}).copy()
-    if 'optimizer' in hyper_params: del hyper_params['optimizer']
+    if 'optimizer' in hyper_params:
+        del hyper_params['optimizer']
 
     if 'criterion' in hyper_params:
         criteria_cfg = hyper_params.pop('criterion')
@@ -134,11 +157,15 @@ def build_agent(
                 loss_cls = getattr(nn, loss_name)
                 hyper_params[key] = loss_cls()
 
-    # --- Part 4: Build Agent ---
+    # --- Part 4: Final Agent Assembly ---
+    is_continuous = config_dict['env']['default'].get('continuous', False)
     agent_cls = globals()[config_dict['agent']['type']]
-    return agent_cls(
+    agent = agent_cls(
         **components,
         optimizer=optimizer,
-        device=device,
+        continuous=is_continuous,
         **hyper_params
     )
+    agent.to(torch.device(device))
+    agent.summary()
+    return agent

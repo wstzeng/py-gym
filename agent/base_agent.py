@@ -1,87 +1,119 @@
 # agents/base_agent.py
 from abc import ABC, abstractmethod
 import torch
-import torch.nn as nn
+from torch import nn
+import numpy as np
 import os
-
+from .buffer import BaseBuffer
 from utils.logger import logger
 
 class BaseAgent(nn.Module, ABC):
-    def __init__(self, encoder: nn.Module, device: str = "auto"):
+    def __init__(
+            self,
+            encoder: nn.Module,
+            policy: nn.Module,
+            buffer: BaseBuffer = None,
+            optimizer: torch.optim.Optimizer = None,
+            continuous: bool = False,
+            **kwargs
+    ):
         super().__init__()
+        # Core components
         self.encoder = encoder
-        # Device management
-        if device == "auto":
-            self.device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu")
-        else:
-            self.device = torch.device(device)
-        
-        self.encoder.to(self.device)
-        self.component_map = {
-            'policy': 'policy',
-            'critic': 'critic',
-            'optimizer': 'optimizer'
-        }
+        self.policy = policy
+        self.buffer = buffer
+        self.optimizer = optimizer
+        self.continuous = continuous
+
+    def __repr__(self):
+        lines = [f"[{self.__class__.__name__}]"]
+        lines.append(f"  - Continuous: {self.continuous}")
+        lines.append(f"  - Device: {self.device}")
+
+        lines.append("  - Components:")
+        for name, module in self.named_children():
+            mod_str = str(module).replace('\n', '\n\t')
+            lines.append(f"\t{name}: {mod_str}")
+
+        if self.buffer is not None:
+            lines.append(f"  - Buffer: {self.buffer.__class__.__name__}")
+        if self.optimizer is not None:
+            lines.append(f"  - Optimizer: {self.optimizer.__class__.__name__}")
+
+        if hasattr(self, 'cfg'):
+            lines.append(f"  - Config: {self.cfg}")
+
+        return "\n".join(lines)
+
+    def summary(self):
+        logger.info(f"[bold cyan]Agent Summary[/bold cyan]\n{self.__repr__()}")
+
+    @property
+    def device(self):
+        """Dynamic detection of the model's device."""
+        try:
+            return next(self.parameters()).device
+        except StopIteration:
+            return torch.device("cpu")
+
+    def record(self, info, reward, done):
+        self.buffer.store(info, reward, done)
 
     def select_action(self, state, deterministic: bool = False):
+        """Unified state preprocessing and action selection flow."""
+        if not isinstance(state, torch.Tensor):
+            state_np = np.array(state)
+            # Standardize dimensions for Vector (N, D) or Visual (N, C, H, W)
+            if state_np.ndim == 1:
+                state_np = state_np[np.newaxis, :]
+            elif state_np.ndim == 3:
+                state_np = np.transpose(state_np, (2, 0, 1))[np.newaxis, :]
+            state = torch.from_numpy(state_np).float().to(self.device)
+
         is_inference = not self.training or deterministic
-        
         with torch.set_grad_enabled(not is_inference):
-            return self._select_action_impl(state, deterministic)
+            action, info = self._select_action_impl(state, deterministic)
+            info["state"] = state
+            return self._to_env_action(action), info
+
+    def _to_env_action(self, action: torch.Tensor):
+        """Standardizes torch (N, A) output to environment-ready format."""
+        action = action.detach().cpu()
+        if self.continuous:
+            return action.squeeze(0).numpy()
+        else:
+            try:
+                return action.item()
+            except RuntimeError:
+                return action.squeeze(0).numpy()
 
     @abstractmethod
     def _select_action_impl(self, state, deterministic):
-        """Hidden implementation to be overridden by child classes."""
         pass
 
-    @abstractmethod
-    def record(self, info: dict, reward: float, done: bool, **kwargs):
-        pass
-
-    @abstractmethod
-    def update(self):
-        pass
-    
     def save_checkpoints(self, path: str):
-        """
-        Generic save method that captures the state of all core components.
-        """
-        import os
-        folder = os.path.dirname(path)
-        if folder and not os.path.exists(folder):
-            os.makedirs(folder)
-
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         checkpoint = {
-            'encoder': self.encoder.state_dict(),
+            name: module.state_dict()
+            for name, module in self.named_children()
         }
-        
-        if hasattr(self, 'policy'):
-            checkpoint['policy'] = self.policy.state_dict()
-        if hasattr(self, 'critic'):
-            checkpoint['critic'] = self.critic.state_dict()
-        if hasattr(self, 'optimizer'):
+        if self.optimizer is not None:
             checkpoint['optimizer'] = self.optimizer.state_dict()
 
         torch.save(checkpoint, path)
-        logger.info(f"[bold green]Checkpoint saved[/bold green] to [cyan]{path}[/cyan]")
+        logger.info(f"Checkpoint saved to {path}")
 
     def load_checkpoints(self, path: str):
-        """
-        Generic load method that restores state for all present components.
-        """
         if not os.path.exists(path):
             logger.warning(f"Checkpoint not found at {path}")
             return
 
         checkpoint = torch.load(path, map_location=self.device)
-        
-        if 'encoder' in checkpoint:
-            self.encoder.load_state_dict(checkpoint['encoder'])
-        
-        for key, attr in self.component_map.items():
-            if hasattr(self, attr) and key in checkpoint:
-                getattr(self, attr).load_state_dict(checkpoint[key])
-        
+        for name, module in self.named_children():
+            if name in checkpoint:
+                module.load_state_dict(checkpoint[name])
+
+        if 'optimizer' in checkpoint and self.optimizer is not None:
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+
         self.eval()
-        logger.info(f"[bold blue]Checkpoint loaded[/bold blue] from [cyan]{path}[/cyan]")

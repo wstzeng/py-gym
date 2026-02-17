@@ -1,83 +1,74 @@
 import torch
+from dataclasses import dataclass
 from .base_agent import BaseAgent
-from utils.torch_utils import state_to_tensor
+
+@dataclass
+class ACConfig:
+    gamma: float = 0.99
+    critic_weight: float = 0.5
+    entropy_weight: float = 0.01
 
 class ActorCriticAgent(BaseAgent):
     def __init__(
             self,
-            encoder,
-            policy,
-            buffer,
-            optimizer,
-            device="auto",
-            gamma=0.99,
-            critic_weight=0.5,
-            entropy_weight=0.01,
-            critic_loss=None,
             **kwargs
     ):
-        super().__init__(encoder, device=device)
-        self.policy = policy.to(self.device)
-        self.buffer = buffer
-        self.optimizer = optimizer
-        self.gamma = gamma
-        self.critic_weight = critic_weight
-        self.entropy_weight = entropy_weight
-        self.critic_loss_fn = critic_loss if critic_loss else torch.nn.SmoothL1Loss()
+        critic_loss = kwargs.pop('critic_loss', torch.nn.MSELoss())
+        super().__init__(**kwargs)
+        self.critic_loss_fn = critic_loss
+        self.cfg = ACConfig(
+            **{k: v for k, v in kwargs.items() if k in ACConfig.__annotations__}
+        )
 
-    @state_to_tensor
     def _select_action_impl(self, state, deterministic):
         features = self.encoder(state)
         dist = self.policy.get_distribution(features)
+
         raw_action = dist.mode if deterministic else dist.sample()
 
-        action_for_buffer = torch.atleast_1d(raw_action.detach().cpu())
-
         info = {
-            "state": state,
-            "action": action_for_buffer,
+            "action": raw_action.detach().cpu().squeeze(0),
             "log_prob": dist.log_prob(raw_action).sum().detach().item(),
             "value": self.policy.get_value(features).detach().item()
         }
-
-        return self.policy.distributor.post_process(raw_action), info
-
-    def record(self, info, reward, done):
-        self.buffer.store(info, reward, done)
+        return raw_action, info
 
     def update(self):
+        """Standard Actor-Critic update logic."""
         data = self.buffer.get_data(self.device)
-        if not data: return 0.0
+        if not data:
+            return 0.0
 
-        old_states = data["states"]
-        old_actions = data["actions"]
-        rewards = data["rewards"]
-        dones = data["dones"]
+        rewards, dones, old_values = data["rewards"], data["dones"], data["values"]
 
+        # Bootstrapped returns
         returns = []
-        g = 0
+        g = old_values[-1].item() if not dones[-1] else 0
         for r, d in zip(reversed(rewards), reversed(dones)):
-            g = r + self.gamma * g * (1 - d)
+            g = r + self.cfg.gamma * g * (1 - d)
             returns.insert(0, g)
         returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
 
-        features = self.encoder(old_states)
+        # Forward pass
+        features = self.encoder(data["states"])
         dist = self.policy.get_distribution(features)
         curr_values = self.policy.get_value(features).view(-1)
 
-        if isinstance(dist, torch.distributions.Categorical):
-            curr_log_probs = dist.log_prob(old_actions.view(-1))
-        else:
-            curr_log_probs = dist.log_prob(old_actions).sum(dim=-1)
+        # Dimension alignment
+        target_actions = data["actions"].squeeze(-1) if not self.continuous else data["actions"]
+        curr_log_probs = dist.log_prob(target_actions)
+        if self.continuous or len(curr_log_probs.shape) > 1:
+            curr_log_probs = curr_log_probs.sum(dim=-1)
 
-        advantages = returns - curr_values.detach()
+        # Loss calculation
+        advantages = (returns - curr_values.detach())
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-        actor_loss = -(curr_log_probs.view(-1) * advantages).mean()
+        actor_loss = -(curr_log_probs * advantages).mean()
         critic_loss = self.critic_loss_fn(curr_values, returns)
         entropy = dist.entropy().mean()
 
-        loss = actor_loss + self.critic_weight * critic_loss - self.entropy_weight * entropy
+        loss = actor_loss + self.cfg.critic_weight * critic_loss - self.cfg.entropy_weight * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
