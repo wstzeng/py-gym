@@ -67,7 +67,7 @@ def run_train(args):
 
     # 5. Optional Evaluation
     if args.eval > 0:
-        logger.info(f"Starting post-training evaluation ({args.eval} episodes)...")
+        logger.info(f"Starting post-training evaluation ({args.eval} episodes)")
         test_env_kwargs = {**config.env.default, **config.env.testing}
         test_loop(
             env_name=config.env.id,
@@ -96,7 +96,7 @@ def run_test(args):
     )
 
     test_env_kwargs = {**config.env.default, **config.env.testing}
-    logger.info(f"Testing model from {args.exp_dir} on {config.env.id}...")
+    logger.info(f"Testing model from {args.exp_dir} on {config.env.id}")
 
     try:
         test_loop(

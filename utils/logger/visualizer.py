@@ -71,7 +71,7 @@ class Visualizer:
                 line, = self.ax2.plot([], [], color=color, linestyle='--', alpha=0.6, label=name.capitalize())
                 self.metric_lines[name] = line
 
-        self.metric_lines[name].set_data(stats['x'], stats[name])
+            self.metric_lines[name].set_data(stats['x'], stats[name])
         h1, l1 = self.ax1.get_legend_handles_labels()
         h2, l2 = self.ax2.get_legend_handles_labels()
         all_handles = h1 + h2

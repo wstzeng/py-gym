@@ -9,41 +9,40 @@ class ACConfig:
     entropy_weight: float = 0.01
 
 class ActorCriticAgent(BaseAgent):
-    def __init__(
-            self,
-            **kwargs
-    ):
+    config_class = ACConfig
+
+    def __init__(self, **kwargs):
         critic_loss = kwargs.pop('critic_loss', torch.nn.MSELoss())
         super().__init__(**kwargs)
         self.critic_loss_fn = critic_loss
-        self.cfg = ACConfig(
-            **{k: v for k, v in kwargs.items() if k in ACConfig.__annotations__}
-        )
 
-    def _select_action_impl(self, state, deterministic):
+    def _acting(self, state, deterministic):
         features = self.encoder(state)
         dist = self.policy.get_distribution(features)
 
         raw_action = dist.mode if deterministic else dist.sample()
+        raw_log_prob = dist.log_prob(raw_action)
+
+        corrected_log_prob = self.policy.distributor.apply_correction(
+            raw_log_prob,
+            raw_action
+        )
 
         info = {
             "action": raw_action.detach().cpu().squeeze(0),
-            "log_prob": dist.log_prob(raw_action).sum().detach().item(),
+            "log_prob": corrected_log_prob.detach().item(),
             "value": self.policy.get_value(features).detach().item()
         }
         return raw_action, info
 
     def update(self):
-        """Standard Actor-Critic update logic."""
         data = self.buffer.get_data(self.device)
-        if not data:
-            return {}
+        if not data: return {}
 
         self.tracker.reset()
-
         rewards, dones, old_values = data["rewards"], data["dones"], data["values"]
 
-        # Bootstrapped returns
+        # Bootstrapped returns (GAE 也可以考慮移入這裡)
         returns = []
         g = old_values[-1].item() if not dones[-1] else 0
         for r, d in zip(reversed(rewards), reversed(dones)):
@@ -56,19 +55,22 @@ class ActorCriticAgent(BaseAgent):
         dist = self.policy.get_distribution(features)
         curr_values = self.policy.get_value(features).view(-1)
 
-        # Dimension alignment
-        target_actions = data["actions"].squeeze(-1) if not self.continuous else data["actions"]
-        curr_log_probs = dist.log_prob(target_actions)
-        if self.continuous or len(curr_log_probs.shape) > 1:
-            curr_log_probs = curr_log_probs.sum(dim=-1)
+        raw_log_probs = dist.log_prob(data["actions"])
+        curr_log_probs = self.policy.distributor.apply_correction(
+            raw_log_probs,
+            data["actions"]
+        )
 
-        # Loss calculation
         advantages = (returns - curr_values.detach())
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         actor_loss = -(curr_log_probs * advantages).mean()
         critic_loss = self.critic_loss_fn(curr_values, returns)
-        entropy = dist.entropy().mean()
+
+        entropy = dist.entropy()
+        if len(entropy.shape) > 1:
+            entropy = entropy.sum(dim=-1)
+        entropy = entropy.mean()
 
         loss = actor_loss + self.cfg.critic_weight * critic_loss - self.cfg.entropy_weight * entropy
 

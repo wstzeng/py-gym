@@ -7,24 +7,26 @@ class ReinforceConfig:
     gamma: float = 0.99
 
 class ReinforceAgent(BaseAgent):
-    def __init__(
-            self,
-            **kwargs
-    ):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cfg = ReinforceConfig(
             **{k: v for k, v in kwargs.items() if k in ReinforceConfig.__annotations__}
         )
 
-    def _select_action_impl(self, state, deterministic):
+    def _acting(self, state, deterministic):
         features = self.encoder(state)
         dist = self.policy.get_distribution(features)
 
         raw_action = dist.mode if deterministic else dist.sample()
+        raw_log_prob = dist.log_prob(raw_action)
+        corrected_log_prob = self.policy.distributor.apply_correction(
+            raw_log_prob,
+            raw_action
+        )
 
         info = {
             "action": raw_action.detach().cpu().squeeze(0),
-            "log_prob": dist.log_prob(raw_action).sum().detach().item(),
+            "log_prob": corrected_log_prob.detach().item(),
         }
         return raw_action, info
 
@@ -50,10 +52,11 @@ class ReinforceAgent(BaseAgent):
         features = self.encoder(data["states"])
         dist = self.policy.get_distribution(features)
 
-        target_actions = data["actions"].squeeze(-1) if not self.continuous else data["actions"]
-        curr_log_probs = dist.log_prob(target_actions)
-        if self.continuous or len(curr_log_probs.shape) > 1:
-            curr_log_probs = curr_log_probs.sum(dim=-1)
+        raw_log_probs = dist.log_prob(data["actions"])
+        curr_log_probs = self.policy.distributor.apply_correction(
+            raw_log_probs,
+            data["actions"]
+        )
 
         # REINFORCE loss: -1/T * sum(log_prob * Gt)
         loss = -(curr_log_probs * returns).mean()

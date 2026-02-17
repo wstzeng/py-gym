@@ -9,17 +9,12 @@ class PPOConfig(ACConfig):
     gae_lambda: float = 0.95
 
 class PPOAgent(ActorCriticAgent):
-    def __init__(
-            self,
-            **kwargs
-    ):
+    config_class = PPOConfig
+
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.cfg = PPOConfig(
-            **{k: v for k, v in kwargs.items() if k in PPOConfig.__annotations__}
-        )
 
     def update(self):
-        """PPO Update logic using self.cfg parameters."""
         data = self.buffer.get_data(self.device)
         if not data or data["states"].size(0) == 0:
             return {}
@@ -32,6 +27,7 @@ class PPOAgent(ActorCriticAgent):
         dones = data["dones"]
 
         self.tracker.reset()
+
         # Generalized Advantage Estimation (GAE)
         advantages = []
         last_gae, next_value = 0, 0
@@ -45,18 +41,20 @@ class PPOAgent(ActorCriticAgent):
         returns = advantages + old_values
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-        total_loss = 0
         for _ in range(self.cfg.k_epochs):
-            # The following components are inherited from ActorCriticAgent
             features = self.encoder(old_states)
             dist = self.policy.get_distribution(features)
             curr_values = self.policy.get_value(features).view(-1)
 
-            # Support both Discrete and Continuous log_prob calculation
-            target_actions = old_actions.squeeze(-1) if not self.continuous else old_actions
-            curr_log_probs = dist.log_prob(target_actions)
-            if self.continuous or len(curr_log_probs.shape) > 1:
-                curr_log_probs = curr_log_probs.sum(dim=-1)
+            # Get raw log_probs (might be [N] for discrete, [N, A] for continuous)
+            # Use .squeeze(-1) to prevent Categorical broadcasting
+            raw_log_probs = dist.log_prob(old_actions.squeeze(-1) if not self.continuous else old_actions)
+
+            # Distributor handles summation
+            curr_log_probs = self.policy.distributor.apply_correction(
+                raw_log_probs,
+                old_actions
+            )
 
             # PPO Clipped Objective
             ratio = torch.exp(curr_log_probs - old_log_probs)
@@ -65,19 +63,22 @@ class PPOAgent(ActorCriticAgent):
 
             actor_loss = -torch.min(surr1, surr2).mean()
             critic_loss = self.critic_loss_fn(curr_values, returns)
-            entropy = dist.entropy().mean()
+
+            entropy = dist.entropy()
+            if len(entropy.shape) > 1:
+                entropy = entropy.sum(dim=-1)
+            entropy = entropy.mean()
 
             loss = actor_loss + self.cfg.critic_weight * critic_loss - self.cfg.entropy_weight * entropy
 
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            total_loss += loss.item()
 
             self.tracker.store(
                 loss=loss,
-                policy=actor_loss,
-                value=critic_loss,
+                actor=actor_loss,
+                critic=critic_loss,
                 entropy=entropy
             )
 

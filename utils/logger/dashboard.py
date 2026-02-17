@@ -79,7 +79,7 @@ class Dashboard:
         if self.progress:
             self.progress.stop()
         
-        logger.info(f"[bold green]Training on {self.viz.env_name} completed![/bold green]")
+        logger.info(f"[bold green]Task for {self.viz.agent_name} in {self.viz.env_name} completed![/bold green]")
 
         if self.save_dir:
             self.viz.save_final(

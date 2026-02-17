@@ -2,6 +2,7 @@
 from abc import ABC, abstractmethod
 import torch
 from torch import nn
+from dataclasses import fields
 import numpy as np
 import os
 from .buffer import BaseBuffer
@@ -18,14 +19,21 @@ class MetricTracker:
         """Standardize metric storage: detach and move to CPU."""
         for k, v in metrics.items():
             if k not in self._data: self._data[k] = []
-            val = v.item() if torch.is_tensor(v) else v
+            if torch.is_tensor(v):
+                val = v.detach().cpu().item()
+            else:
+                val = v
             self._data[k].append(val)
 
     def result(self) -> dict:
         """Calculate mean for all tracked metrics."""
-        return {k: sum(v) / len(v) for k, v in self._data.items() if v}
+        return {
+            k: sum(v) / len(v) for k, v in self._data.items() if len(v) > 0
+        }
 
 class BaseAgent(nn.Module, ABC):
+    config_class = None
+
     def __init__(
             self,
             encoder: nn.Module,
@@ -43,6 +51,12 @@ class BaseAgent(nn.Module, ABC):
         self.optimizer = optimizer
         self.continuous = continuous
         self.tracker = MetricTracker()
+
+        if self.config_class:
+            valid_fields = {f.name for f in fields(self.config_class)}
+            self.cfg = self.config_class(
+                **{k: v for k, v in kwargs.items() if k in valid_fields}
+            )
 
     def __repr__(self):
         lines = [f"[{self.__class__.__name__}]"]
@@ -91,7 +105,7 @@ class BaseAgent(nn.Module, ABC):
 
         is_inference = not self.training or deterministic
         with torch.set_grad_enabled(not is_inference):
-            action, info = self._select_action_impl(state, deterministic)
+            action, info = self._acting(state, deterministic)
             info["state"] = state
             return self._to_env_action(action), info
 
@@ -111,7 +125,7 @@ class BaseAgent(nn.Module, ABC):
         pass
 
     @abstractmethod
-    def _select_action_impl(self, state, deterministic):
+    def _acting(self, state, deterministic):
         pass
 
     def save_checkpoints(self, path: str):
