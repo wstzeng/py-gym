@@ -18,11 +18,8 @@ class Dashboard:
             modes: list = None
     ):
         self.modes = modes or []
-        self.save_dir = save_dir
         self.tracked_metrics = []
-
-        if self.save_dir:
-            os.makedirs(os.path.join(self.save_dir, 'logs'), exist_ok=True)
+        self.save_dir = save_dir
 
         self.data = DataCollector(window_size=window_size, save_dir=self.save_dir)
         self.viz = Visualizer(agent_name, env_name)

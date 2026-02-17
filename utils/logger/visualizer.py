@@ -18,7 +18,7 @@ class Visualizer:
     def setup_live(self):
         plt.ion()
         self.fig, self.ax1 = plt.subplots(figsize=(10, 6))
-        self.fig.subplots_adjust(top=0.88)
+        self.fig.subplots_adjust(top=0.82, bottom=0.12)
         self.ax2 = self.ax1.twinx()
 
         # Setup Labels
@@ -39,7 +39,16 @@ class Visualizer:
         # Dynamic Plots: Multiple Metrics
         self.metric_lines = {}
 
-        self.fig.suptitle(f'{self.agent_name}: {self.env_name}', **self.styles['suptitle'])
+        self.legend = self.ax1.legend(
+            [], [],
+            loc='lower center',
+            bbox_to_anchor=(0.5, 1.02),
+            ncol=5,
+            fontsize='small',
+            frameon=False
+        )
+
+        self.fig.suptitle(f'{self.agent_name}@{self.env_name}', **self.styles['suptitle'])
 
     def update_live(self, stats: dict):
         if not self.fig or not stats:
@@ -61,9 +70,23 @@ class Visualizer:
                 color = ["tab:orange", "tab:red", "tab:green", "tab:brown"][len(self.metric_lines) % 4]
                 line, = self.ax2.plot([], [], color=color, linestyle='--', alpha=0.6, label=name.capitalize())
                 self.metric_lines[name] = line
-                self.ax2.legend(loc='upper right', fontsize='small')
 
-            self.metric_lines[name].set_data(stats['x'], stats[name])
+        self.metric_lines[name].set_data(stats['x'], stats[name])
+        h1, l1 = self.ax1.get_legend_handles_labels()
+        h2, l2 = self.ax2.get_legend_handles_labels()
+        all_handles = h1 + h2
+        all_labels = l1 + l2
+
+        if len(all_handles) != len(self.legend.get_texts()):
+            self.legend = self.ax1.legend(
+                all_handles,
+                all_labels,
+                loc='lower center',
+                bbox_to_anchor=(0.5, 1.02),
+                ncol=6,
+                fontsize='small',
+                frameon=False
+            )
 
         # 3. Standard Deviation Trending
         if len(stats['x']) > 1:
