@@ -33,9 +33,13 @@
                             "out_features": 2
                         }
                     ],
-                    "distributor": {
-                        "type": "CategoricalDist",
-                        "params": {}
+                    "handler": {
+                        "type": "CategoricalHandler",
+                        "params": {
+                            "action_dim": 2,
+                            "action_low": -1.0,
+                            "action_high": 1.0
+                        }
                     }
                 }
             },
@@ -47,8 +51,10 @@
     "hyper_params": {
         "optimizer": {
             "type": "Adam",
-            "lrs": {
-                "default": 1e-3
+            "params": {
+                "lrs": {
+                    "default": 1e-3
+                }
             }
         },
         "gamma": 0.99
