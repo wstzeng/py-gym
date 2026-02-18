@@ -34,6 +34,9 @@ class BaseActionHandler(nn.Module):
         raise NotImplementedError
 
 class CategoricalHandler(BaseActionHandler):
+    def __init__(self, action_dim):
+        super().__init__(action_dim)
+
     @property
     def required_input_dim(self):
         return self.action_dim
@@ -56,6 +59,9 @@ class CategoricalHandler(BaseActionHandler):
         return action.item()
 
 class ContinuousActionHandler(BaseActionHandler):
+    def __init__(self, action_dim):
+        super().__init__(action_dim)
+
     def get_log_prob(self, dist, action):
         return dist.log_prob(action)
 
@@ -95,10 +101,10 @@ class NormalHandler(ContinuousActionHandler):
 
 class BetaHandler(ContinuousActionHandler):
     def __init__(
-            self, 
-            action_dim, 
-            action_low=-1.0, 
-            action_high=1.0, 
+            self,
+            action_dim,
+            action_low=-1.0,
+            action_high=1.0,
             base=1.0
     ):
         super().__init__(action_dim)
