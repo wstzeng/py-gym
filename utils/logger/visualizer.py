@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import matplotlib.pyplot as plt
 from .plot_config import set_plot_style
@@ -7,10 +6,12 @@ class Visualizer:
     def __init__(
             self,
             agent_name: str,
-            env_name: str
+            env_name: str,
+            window_size: int = 50,
     ):
         self.agent_name = agent_name
         self.env_name = env_name
+        self.window_size = window_size
         self.styles = set_plot_style()
         self.fig = None
         self.fill_area = None
@@ -53,12 +54,19 @@ class Visualizer:
     def update_live(self, stats: dict):
         if not self.fig or not stats:
             return
+        
+        current_x = stats['x']
+        if len(current_x) == 0:
+            return
 
-        # 1. Update Reward Plots
+        max_x = current_x[-1]
+
+        x_min = max(0, max_x - self.window_size)
+        x_max = x_min + self.window_size
+
         self.line_raw.set_data(stats['x'], stats['raw'])
         self.line_trend.set_data(stats['x'], stats['smoothed'])
 
-        # 2. Update Dynamic Metrics (ax2)
         # Excludes known keys related to Reward in Stats
         known_keys = {'x', 'raw', 'smoothed', 'std_up', 'std_lo'}
         for name in stats.keys():
@@ -96,10 +104,13 @@ class Visualizer:
                 color='tab:blue', alpha=0.12, zorder=2, linewidth=0
             )
 
+        x_min -= 0.01 * self.window_size
+        x_max += 0.01 * self.window_size
+        self.ax1.set_xlim(x_min, x_max)
         self.ax1.relim()
-        self.ax1.autoscale_view()
+        self.ax1.autoscale_view(scalex=False, scaley=True)
         self.ax2.relim()
-        self.ax2.autoscale_view()
+        self.ax2.autoscale_view(scalex=False, scaley=True)
         self.fig.canvas.draw_idle()
         self.fig.canvas.flush_events()
 

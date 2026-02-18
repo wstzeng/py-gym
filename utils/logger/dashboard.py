@@ -22,7 +22,7 @@ class Dashboard:
         self.save_dir = save_dir
 
         self.data = DataCollector(window_size=window_size, save_dir=self.save_dir)
-        self.viz = Visualizer(agent_name, env_name)
+        self.viz = Visualizer(agent_name, env_name, window_size=window_size)
 
         if 'live' in self.modes:
             self.viz.setup_live()
