@@ -44,10 +44,10 @@ experiments/
 
 # Configurations
 # Ignore working drafts but keep templates and stable recipes
-configs/draft/
+config/draft/
 
 # Ensure templates and stable configs are tracked
-!configs/templates/
-!configs/stable/
-!configs/templates/*.json
-!configs/stable/*.json
+!config/templates/
+!config/stable/
+!config/templates/*.json
+!config/stable/*.json
