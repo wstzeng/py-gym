@@ -75,6 +75,7 @@ class BaseAgent(nn.Module, ABC):
         if hasattr(self, 'cfg') and self.cfg is not None:
             lines.append("\n[bold yellow][Configuration][/bold yellow]")
             cfg_dict = asdict(self.cfg) if is_dataclass(self.cfg) else getattr(self.cfg, '__dict__', {})
+            cfg_dict = dict(sorted(cfg_dict.items()))
             for k, v in cfg_dict.items():
                 lines.append(f"  {k}: {v}")
 
