@@ -3,10 +3,10 @@ import argparse
 import tempfile
 from datetime import datetime
 
+from config import AgentConfig
 from utils.builder import build_agent
 from utils.train import train_loop
 from utils.test import test_loop
-from utils.config import AgentConfig
 from utils.logger import logger, Dashboard
 
 def get_base_parser():
