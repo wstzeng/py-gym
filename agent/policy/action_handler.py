@@ -2,6 +2,12 @@ import torch
 from torch import nn
 from torch.distributions import Categorical, Normal, Beta
 
+__all__ = [
+    "CategoricalHandler",
+    "NormalHandler",
+    "BetaHandler",
+]
+
 class BaseActionHandler(nn.Module):
     def __init__(self, action_dim):
         super().__init__()
