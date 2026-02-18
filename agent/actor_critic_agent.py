@@ -16,6 +16,9 @@ class ActorCriticAgent(BaseAgent):
         super().__init__(**kwargs)
         self.critic_loss_fn = critic_loss
 
+        self.metric_weights['critic'] = self.cfg.critic_weight
+        self.metric_weights['entropy'] = -self.cfg.entropy_weight
+
     def _acting(self, state, deterministic):
         features = self.encoder(state)
         dist = self.policy.get_distribution(features)
@@ -23,7 +26,7 @@ class ActorCriticAgent(BaseAgent):
         raw_action = dist.mode if deterministic else dist.sample()
         raw_log_prob = dist.log_prob(raw_action)
 
-        corrected_log_prob = self.policy.distributor.apply_correction(
+        corrected_log_prob = self.policy.handler.apply_correction(
             raw_log_prob,
             raw_action
         )
@@ -55,8 +58,8 @@ class ActorCriticAgent(BaseAgent):
         dist = self.policy.get_distribution(features)
         curr_values = self.policy.get_value(features).view(-1)
 
-        raw_log_probs = dist.log_prob(data["actions"])
-        curr_log_probs = self.policy.distributor.apply_correction(
+        raw_log_probs = self.policy.handler.get_log_prob(dist, data["actions"])
+        curr_log_probs = self.policy.handler.apply_correction(
             raw_log_probs,
             data["actions"]
         )

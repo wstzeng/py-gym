@@ -19,7 +19,7 @@ class ReinforceAgent(BaseAgent):
 
         raw_action = dist.mode if deterministic else dist.sample()
         raw_log_prob = dist.log_prob(raw_action)
-        corrected_log_prob = self.policy.distributor.apply_correction(
+        corrected_log_prob = self.policy.handler.apply_correction(
             raw_log_prob,
             raw_action
         )
@@ -52,8 +52,8 @@ class ReinforceAgent(BaseAgent):
         features = self.encoder(data["states"])
         dist = self.policy.get_distribution(features)
 
-        raw_log_probs = dist.log_prob(data["actions"])
-        curr_log_probs = self.policy.distributor.apply_correction(
+        raw_log_probs = self.policy.handler.get_log_prob(dist, data["actions"])
+        curr_log_probs = self.policy.handler.apply_correction(
             raw_log_probs,
             data["actions"]
         )

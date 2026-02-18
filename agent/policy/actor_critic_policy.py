@@ -4,8 +4,8 @@ class ActorCriticPolicy(BasePolicy):
     """
     Implementation of Actor-Critic architecture inheriting from BasePolicy.
     """
-    def __init__(self, actor, critic, distributor):
-        super().__init__(distributor)
+    def __init__(self, actor, critic, **kwargs):
+        super().__init__(**kwargs)
         # Use composition to allow different encoders or heads
         self.actor = actor
         self.critic = critic
@@ -21,7 +21,7 @@ class ActorCriticPolicy(BasePolicy):
         Convenience method if only action is needed.
         """
         logits = self.actor(x)
-        return self.distributor(logits)
+        return self.handler(logits)
 
     def get_value(self, x):
         """

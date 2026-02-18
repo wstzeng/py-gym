@@ -1,7 +1,7 @@
 from torch import nn, optim
 from agent.encoder import *
 from agent.policy import *
-from agent.policy.distributors import *
+from agent.policy.action_handler import *
 from agent import *
 from agent.buffer import *
 from utils.logger import logger
@@ -158,12 +158,10 @@ def build_agent(
                 hyper_params[key] = loss_cls()
 
     # --- Part 4: Final Agent Assembly ---
-    is_continuous = config_dict['env']['default'].get('continuous', False)
     agent_cls = globals()[config_dict['agent']['type']]
     agent = agent_cls(
         **components,
         optimizer=optimizer,
-        continuous=is_continuous,
         **hyper_params
     )
     agent.to(torch.device(device))

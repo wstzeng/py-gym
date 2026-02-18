@@ -9,24 +9,25 @@ from .buffer import BaseBuffer
 from utils.logger import logger
 
 class MetricTracker:
-    def __init__(self):
+    def __init__(self, weights: dict):
+        self.metric_weights = weights
         self.reset()
 
     def reset(self):
         self._data = {}
 
     def store(self, **metrics):
-        """Standardize metric storage: detach and move to CPU."""
         for k, v in metrics.items():
-            if k not in self._data: self._data[k] = []
-            if torch.is_tensor(v):
-                val = v.detach().cpu().item()
-            else:
-                val = v
+            if k not in self._data:
+                self._data[k] = []
+            val = v.detach().cpu().item() if torch.is_tensor(v) else v
+
+            if k in self.metric_weights:
+                val *= self.metric_weights[k]
+
             self._data[k].append(val)
 
     def result(self) -> dict:
-        """Calculate mean for all tracked metrics."""
         return {
             k: sum(v) / len(v) for k, v in self._data.items() if len(v) > 0
         }
@@ -50,7 +51,9 @@ class BaseAgent(nn.Module, ABC):
         self.buffer = buffer
         self.optimizer = optimizer
         self.continuous = continuous
-        self.tracker = MetricTracker()
+
+        self.metric_weights = {}
+        self.tracker = MetricTracker(self.metric_weights)
 
         if self.config_class:
             valid_fields = {f.name for f in fields(self.config_class)}

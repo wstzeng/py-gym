@@ -46,12 +46,10 @@ class PPOAgent(ActorCriticAgent):
             dist = self.policy.get_distribution(features)
             curr_values = self.policy.get_value(features).view(-1)
 
-            # Get raw log_probs (might be [N] for discrete, [N, A] for continuous)
-            # Use .squeeze(-1) to prevent Categorical broadcasting
-            raw_log_probs = dist.log_prob(old_actions.squeeze(-1) if not self.continuous else old_actions)
+            raw_log_probs = self.policy.handler.get_log_prob(dist, old_actions)
 
-            # Distributor handles summation
-            curr_log_probs = self.policy.distributor.apply_correction(
+            # Handler handles summation
+            curr_log_probs = self.policy.handler.apply_correction(
                 raw_log_probs,
                 old_actions
             )
