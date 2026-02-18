@@ -18,6 +18,12 @@ The framework follows a strict modular design:
     - **[Encoder](agent/encoder)**: State representation learning and feature extraction.
 - **[Utils](utils/)**: Decoupled training logic, logging systems, and object builders.
 
+## Configuration System
+
+This framework is entirely **configuration-driven**. You can define environment settings, neural network architectures, and action handlers without modifying the source code.
+
+For detailed documentation on how to write or customize your own configurations, please refer to the **[Configuration Specification](configs/Config.md)**.
+
 ## Experiment Management
 
 Every training run generates a self-contained directory in `experiments/`:
@@ -32,15 +38,29 @@ experiments/ENV_TIMESTAMP/
 
 ## Setup & Usage
 
+### 1. Installation
+Choose the method that fits your environment:
+
+#### Using Poetry (Recommended)
 ```bash
-# Install dependencies
 poetry install
+```
 
-# Train an agent
-poetry run python run_train.py experiments/lunar/ppo.json --iterations 500 --episodes 10
+#### Using standard pip
+```bash
+pip install -r requirements.txt
+```
 
-# Test a trained model
-poetry run python run_test.py experiments/ENV_TIMESTAMP/
+### 2. Basic Commands
+
+#### Train with configuration
+```bash
+python manage.py train <config_name>.json
+```
+
+#### Test a trained model
+```bash
+python manage.py test <experiment_directory>
 ```
 
 ## Project Status
