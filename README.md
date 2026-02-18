@@ -41,9 +41,11 @@ experiments/ENV_TIMESTAMP/
 ### 1. Installation
 Choose the method that fits your environment:
 
-#### Using Poetry (Recommended)
+> **Note**: This dual-stage installation serves as a workaround for packages that do not fully comply with PEP 517.
+> Running the installation twice ensures that build-time dependencies are correctly localized and available in the environment path before the compilation of legacy build backends begins.
+#### Using Poetry
 ```bash
-poetry install
+poetry install; poetry run poetry install
 ```
 
 #### Using standard pip

@@ -3,17 +3,19 @@ name = "gym"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "wstzeng",email = "wst991002@gapp.nthu.edu.tw"}
+    {name = "wstzeng",email = "danieltzeng088@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
+    "swig (>=4.0.0)",
     "torch (>=2.6.0,<3.0.0)",
-    "gymnasium[box2d] (>=1.1.1,<2.0.0)",
     "numpy (>=1.26.4,<2.0.0)",
     "matplotlib (>=3.10.1,<4.0.0)",
+    "gymnasium[box2d] (>=1.1.1,<2.0.0)",
     "setuptools (>=65.0.0,<70.0.0)",
     "rich (>=14.2.0,<15.0.0)",
+    "tomli-w (>=1.2.0,<2.0.0)",
 ]
 
 [build-system]
