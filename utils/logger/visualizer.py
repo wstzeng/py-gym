@@ -61,7 +61,7 @@ class Visualizer:
 
         max_x = current_x[-1]
 
-        base_min = max(1, max_x - self.window_size + 1)
+        base_min = max(0, max_x - self.window_size)
         base_max = base_min + self.window_size
 
         self.line_raw.set_data(stats['x'], stats['raw'])

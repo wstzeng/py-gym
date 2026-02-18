@@ -14,7 +14,7 @@ def test_loop(
     env = gym.make(env_name, **kwargs)
     agent.eval()
 
-    for ep in range(1, episodes + 1):
+    for ep in range(episodes):
         state, _ = env.reset()
         total_reward = 0
 

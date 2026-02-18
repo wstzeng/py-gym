@@ -14,7 +14,7 @@ def train_loop(
     env = gym.make(env_name, **kwargs)
     agent.train()
 
-    for t in range(1, iterations + 1):
+    for t in range(iterations):
         total_rewards = []
 
         for _ in range(episodes):
