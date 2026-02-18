@@ -45,7 +45,7 @@ class ActorCriticAgent(BaseAgent):
         self.tracker.reset()
         rewards, dones, old_values = data["rewards"], data["dones"], data["values"]
 
-        # Bootstrapped returns (GAE 也可以考慮移入這裡)
+        # Bootstrapped returns
         returns = []
         g = old_values[-1].item() if not dones[-1] else 0
         for r, d in zip(reversed(rewards), reversed(dones)):

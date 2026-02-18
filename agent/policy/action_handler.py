@@ -58,7 +58,13 @@ class ContinuousActionHandler(BaseActionHandler):
         return act_np[0] if act_np.shape[0] == 1 else act_np
 
 class NormalHandler(ContinuousActionHandler):
-    def __init__(self, action_dim, action_low=-1.0, action_high=1.0, eps=1e-6):
+    def __init__(
+            self,
+            action_dim,
+            action_low=-1.0,
+            action_high=1.0,
+            eps=1e-6
+    ):
         super().__init__(action_dim)
         self.register_buffer("low", torch.as_tensor(action_low, dtype=torch.float32))
         self.register_buffer("high", torch.as_tensor(action_high, dtype=torch.float32))
@@ -82,7 +88,13 @@ class NormalHandler(ContinuousActionHandler):
         return (log_prob - correction).sum(dim=-1)
 
 class BetaHandler(ContinuousActionHandler):
-    def __init__(self, action_dim, action_low=-1.0, action_high=1.0, base=1.0):
+    def __init__(
+            self, 
+            action_dim, 
+            action_low=-1.0, 
+            action_high=1.0, 
+            base=1.0
+    ):
         super().__init__(action_dim)
         self.register_buffer("low", torch.as_tensor(action_low, dtype=torch.float32))
         self.register_buffer("high", torch.as_tensor(action_high, dtype=torch.float32))

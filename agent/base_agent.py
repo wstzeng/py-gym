@@ -41,7 +41,6 @@ class BaseAgent(nn.Module, ABC):
             policy: nn.Module,
             buffer: BaseBuffer = None,
             optimizer: torch.optim.Optimizer = None,
-            continuous: bool = False,
             **kwargs
     ):
         super().__init__()
@@ -50,7 +49,6 @@ class BaseAgent(nn.Module, ABC):
         self.policy = policy
         self.buffer = buffer
         self.optimizer = optimizer
-        self.continuous = continuous
 
         self.metric_weights = {}
         self.tracker = MetricTracker(self.metric_weights)
@@ -62,22 +60,32 @@ class BaseAgent(nn.Module, ABC):
             )
 
     def __repr__(self):
+        # Header with Class Name
         lines = [f"[{self.__class__.__name__}]"]
-        lines.append(f"  - Continuous: {self.continuous}")
-        lines.append(f"  - Device: {self.device}")
+        lines.append(f'device = "{self.device}"')
 
-        lines.append("  - Components:")
+        # Components section (Nested table)
+        lines.append("\n[Components]")
         for name, module in self.named_children():
-            mod_str = str(module).replace('\n', '\n\t')
-            lines.append(f"\t{name}: {mod_str}")
+            # Simplifies module string to avoid giant walls of text
+            mod_repr = module.__class__.__name__
+            lines.append(f'{name} = "{mod_repr}"')
 
-        if self.buffer is not None:
-            lines.append(f"  - Buffer: {self.buffer.__class__.__name__}")
-        if self.optimizer is not None:
-            lines.append(f"  - Optimizer: {self.optimizer.__class__.__name__}")
+        # Infrastructure section
+        lines.append("\n[Infrastructure]")
+        lines.append(f'buffer = "{self.buffer.__class__.__name__ if self.buffer else "None"}"')
+        lines.append(f'optimizer = "{self.optimizer.__class__.__name__ if self.optimizer else "None"}"')
 
+        # Config section (Dynamic Fields)
         if hasattr(self, 'cfg'):
-            lines.append(f"  - Config: {self.cfg}")
+            lines.append("\n[Config]")
+            # Assumes self.cfg is a dataclass or has __dict__
+            from dataclasses import asdict, is_dataclass
+            cfg_dict = asdict(self.cfg) if is_dataclass(self.cfg) else getattr(self.cfg, '__dict__', {})
+            for k, v in cfg_dict.items():
+                # Correctly format strings for TOML
+                val = f'"{v}"' if isinstance(v, str) else str(v)
+                lines.append(f"{k} = {val}")
 
         return "\n".join(lines)
 
@@ -113,15 +121,7 @@ class BaseAgent(nn.Module, ABC):
             return self._to_env_action(action), info
 
     def _to_env_action(self, action: torch.Tensor):
-        """Standardizes torch (N, A) output to environment-ready format."""
-        action = action.detach().cpu()
-        if self.continuous:
-            return action.squeeze(0).numpy()
-        else:
-            try:
-                return action.item()
-            except RuntimeError:
-                return action.squeeze(0).numpy()
+        return self.policy.handler.to_env_format(action)
 
     @abstractmethod
     def update(self):

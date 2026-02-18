@@ -29,13 +29,13 @@ def build_optimizer(
         config_dict: dict,
         agent_components: dict
 ) -> optim.Optimizer:
-    # Extract optimizer configuration and define learning rates
     opt_cfg = config_dict['hyper_params']['optimizer']
     opt_cls = getattr(optim, opt_cfg['type'])
-    lrs_cfg = opt_cfg.get('lrs', {})
+
+    opt_params = opt_cfg.get('params', {})
+    lrs_cfg = opt_params.get('lrs', {})
     default_lr = lrs_cfg.get('default', 1e-3)
 
-    # Build a mapping of all modules and their sub-modules to assign specific learning rates
     module_dict = {}
     for comp_name, comp in agent_components.items():
         if isinstance(comp, nn.Module):
@@ -44,35 +44,26 @@ def build_optimizer(
                 if child_name:
                     module_dict[child_name] = child_module
 
-    # Iterate through specified learning rates and assign parameters to groups
     param_groups = []
     seen_params = set()
 
     for target_name, lr in lrs_cfg.items():
         if target_name != 'default' and target_name in module_dict:
             target_module = module_dict[target_name]
-            params_to_add = []
-            for p in target_module.parameters():
-                if p not in seen_params:
-                    params_to_add.append(p)
-                    seen_params.add(p)
+            params_to_add = [p for p in target_module.parameters() if p not in seen_params]
             if params_to_add:
                 param_groups.append({'params': params_to_add, 'lr': lr})
+                seen_params.update(params_to_add)
 
-    # Gather remaining unassigned parameters and apply the default learning rate
     remaining_params = []
     for comp in agent_components.values():
         if isinstance(comp, nn.Module):
-            for p in comp.parameters():
-                if p not in seen_params:
-                    remaining_params.append(p)
-                    seen_params.add(p)
+            remaining_params.extend([p for p in comp.parameters() if p not in seen_params])
 
     if remaining_params:
         param_groups.append({'params': remaining_params, 'lr': default_lr})
 
-    # Initialize the optimizer with the constructed parameter groups
-    base_params = {k: v for k, v in opt_cfg.items() if k not in ['type', 'lrs']}
+    base_params = {k: v for k, v in opt_params.items() if k != 'lrs'}
 
     return opt_cls(
         param_groups,
