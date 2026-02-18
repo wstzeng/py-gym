@@ -1,7 +1,7 @@
 {
     "env": {
-        "id": "CartPole-v1",
-        "state_dim": 4,
+        "id": "Pendulum-v1",
+        "state_dim": 3,
         "default": {},
         "training": {},
         "testing": {
@@ -16,7 +16,7 @@
                 "layers": [
                     {
                         "type": "Linear",
-                        "out_features": 32
+                        "out_features": 64
                     },
                     {
                         "type": "LeakyReLU"
@@ -25,35 +25,29 @@
             },
             "policy": {
                 "type": "ActorCriticPolicy",
-                "feature_dim": 32,
+                "feature_dim": 64,
                 "components": {
-                    "actor": [
-                        {
-                            "type": "Linear",
-                            "out_features": 2
-                        }
-                    ],
-                    "critic": [
-                        {
-                            "type": "Linear",
-                            "out_features": 64
-                        },
-                        {
-                            "type": "LeakyReLU"
-                        },
-                        {
-                            "type": "Linear", "out_features": 32
-                        },
-                        {
-                            "type": "LeakyReLU"
-                        },
-                        {
-                            "type": "Linear", "out_features": 1
-                        }
-                    ],
+                    "actor": {
+                        "type": "Sequential",
+                        "layers": [
+                            { "type": "Linear", "out_features": 3 }
+                        ]
+                    },
+                    "critic": {
+                        "type": "Sequential",
+                        "layers": [
+                            { "type": "Linear", "out_features": 64 },
+                            { "type": "LeakyReLU" },
+                            { "type": "Linear", "out_features": 1 }
+                        ]
+                    },
                     "handler": {
-                        "type": "CategoricalHandler",
-                        "params": {}
+                        "type": "NormalHandler",
+                        "params": {
+                            "action_dim": 1,
+                            "action_low": -2.0,
+                            "action_high": 2.0
+                        }
                     }
                 }
             },
@@ -75,10 +69,11 @@
         },
         "eps_clip": 0.2,
         "k_epochs": 10,
-        "entropy_weight": 0.01,
+        "critic_weight": 1e-2,
+        "entropy_weight": 1e-2,
         "gamma": 0.99,
         "criterion": {
-            "critic_loss": "MSELoss"
+            "critic_loss": "SmoothL1Loss"
         }
     }
 }

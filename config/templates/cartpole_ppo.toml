@@ -1,0 +1,56 @@
+[env]
+id = "CartPole-v1"
+state_dim = 4
+default = {}
+training = {}
+testing = { render_mode = "human" }
+
+[agent]
+type = "PPOAgent"
+
+[agent.components.encoder]
+type = "VectorEncoder"
+layers = [
+    { type = "Linear", out_features = 32 },
+    { type = "LeakyReLU" }
+]
+
+[agent.components.policy]
+type = "ActorCriticPolicy"
+feature_dim = 32
+
+[agent.components.policy.components.actor]
+type = "Sequential"
+layers = [{ type = "Linear", out_features = 2 }]
+
+[agent.components.policy.components.critic]
+type = "Sequential"
+layers = [
+    { type = "Linear", out_features = 64 },
+    { type = "LeakyReLU" },
+    { type = "Linear", out_features = 1 }
+]
+
+[agent.components.policy.components.handler]
+type = "CategoricalHandler"
+params = { "action_dim" = 2 }
+
+[agent.components.buffer]
+type = "TrajectoryBuffer"
+
+[hyper_params]
+eps_clip = 0.2
+k_epochs = 10
+critic_weight = 0.01
+entropy_weight = 0.01
+gamma = 0.99
+
+[hyper_params.optimizer]
+type = "AdamW"
+
+[hyper_params.optimizer.params]
+weight_decay = 0.01
+lrs = { default = 0.001, critic = 0.0001 }
+
+[hyper_params.criterion]
+critic_loss = "MSELoss"

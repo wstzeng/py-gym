@@ -1,8 +1,11 @@
 {
     "env": {
-        "id": "Pendulum-v1",
-        "state_dim": 3,
-        "default": {},
+        "id": "LunarLander-v3",
+        "state_dim": 8,
+        "default": {
+            "continuous": false,
+            "enable_wind": false
+        },
         "training": {},
         "testing": {
             "render_mode": "human"
@@ -16,7 +19,14 @@
                 "layers": [
                     {
                         "type": "Linear",
-                        "out_features": 64
+                        "out_features": 128
+                    },
+                    {
+                        "type": "LeakyReLU"
+                    },
+                    {
+                        "type": "Linear",
+                        "out_features": 128
                     },
                     {
                         "type": "LeakyReLU"
@@ -25,9 +35,15 @@
             },
             "policy": {
                 "type": "ActorCriticPolicy",
-                "feature_dim": 64,
+                "feature_dim": 128,
                 "components": {
                     "actor": [
+                        {
+                            "type": "Linear",
+                            "out_features": 4
+                        }
+                    ],
+                    "critic": [
                         {
                             "type": "Linear",
                             "out_features": 64
@@ -37,29 +53,19 @@
                         },
                         {
                             "type": "Linear",
-                            "out_features": 1
-                        }
-                    ],
-                    "critic": [
-                        {
-                            "type": "Linear",
-                            "out_features": 64
+                            "out_features": 32
                         },
                         {
-                            "type": "ReLU"
+                            "type": "LeakyReLU"
                         },
                         {
                             "type": "Linear",
                             "out_features": 1
                         }
                     ],
-                    "handler": {
-                        "type": "NormalHandler",
-                        "params": {
-                            "action_dim": 1,
-                            "action_low": -1.0,
-                            "action_high": 1.0
-                        }
+                    "distributor": {
+                        "type": "CategoricalDist",
+                        "params": {}
                     }
                 }
             },
@@ -71,19 +77,17 @@
     "hyper_params": {
         "optimizer": {
             "type": "AdamW",
-            "params": {
-                "lrs": {
-                    "default": 3e-4,
-                    "critic": 1e-3
-                },
-                "weight_decay": 1e-2
-            }
+            "lrs": {
+                "default": 1e-3,
+                "critic": 1e-4
+            },
+            "weight_decay": 1e-2
         },
         "eps_clip": 0.2,
         "k_epochs": 10,
-        "entropy_weight": 0.0,
-        "gamma": 0.9,
-        "critic_weight": 1e-3,
+        "critic_weight": 0.5,
+        "entropy_weight": 0.01,
+        "gamma": 0.99,
         "criterion": {
             "critic_loss": "SmoothL1Loss"
         }
