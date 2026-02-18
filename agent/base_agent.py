@@ -2,8 +2,9 @@
 from abc import ABC, abstractmethod
 import torch
 from torch import nn
-from dataclasses import fields
+from dataclasses import fields, is_dataclass, asdict
 import numpy as np
+import tomli_w
 import os
 from .buffer import BaseBuffer
 from utils.logger import logger
@@ -33,7 +34,7 @@ class MetricTracker:
         }
 
 class BaseAgent(nn.Module, ABC):
-    config_class = None
+    _config_class = None
 
     def __init__(
             self,
@@ -50,47 +51,35 @@ class BaseAgent(nn.Module, ABC):
         self.buffer = buffer
         self.optimizer = optimizer
 
-        self.metric_weights = {}
-        self.tracker = MetricTracker(self.metric_weights)
+        self._metric_weights = {}
+        self._tracker = MetricTracker(self._metric_weights)
 
-        if self.config_class:
-            valid_fields = {f.name for f in fields(self.config_class)}
-            self.cfg = self.config_class(
+        if self._config_class:
+            valid_fields = {f.name for f in fields(self._config_class)}
+            self.cfg = self._config_class(
                 **{k: v for k, v in kwargs.items() if k in valid_fields}
             )
 
-    def __repr__(self):
-        # Header with Class Name
-        lines = [f"[{self.__class__.__name__}]"]
-        lines.append(f'device = "{self.device}"')
+    def summary(self):
+        lines = [f"[bold cyan][{self.__class__.__name__} Summary][/bold cyan]"]
+        
+        # 2. Metadata (Basic Info)
+        lines.append(f"Device: {self.device}")
+        lines.append(f"Optimizer: {self.optimizer.__class__.__name__ if self.optimizer else 'None'}")
 
-        # Components section (Nested table)
-        lines.append("\n[Components]")
-        for name, module in self.named_children():
-            # Simplifies module string to avoid giant walls of text
-            mod_repr = module.__class__.__name__
-            lines.append(f'{name} = "{mod_repr}"')
+        # 3. Agent Structure (Full PyTorch Repr)
+        lines.append("\n[bold yellow][Model Architecture][/bold yellow]")
+        lines.append(str(self))
 
-        # Infrastructure section
-        lines.append("\n[Infrastructure]")
-        lines.append(f'buffer = "{self.buffer.__class__.__name__ if self.buffer else "None"}"')
-        lines.append(f'optimizer = "{self.optimizer.__class__.__name__ if self.optimizer else "None"}"')
-
-        # Config section (Dynamic Fields)
-        if hasattr(self, 'cfg'):
-            lines.append("\n[Config]")
-            # Assumes self.cfg is a dataclass or has __dict__
-            from dataclasses import asdict, is_dataclass
+        # 4. Config (Parameters)
+        if hasattr(self, 'cfg') and self.cfg is not None:
+            lines.append("\n[bold yellow][Configuration][/bold yellow]")
             cfg_dict = asdict(self.cfg) if is_dataclass(self.cfg) else getattr(self.cfg, '__dict__', {})
             for k, v in cfg_dict.items():
-                # Correctly format strings for TOML
-                val = f'"{v}"' if isinstance(v, str) else str(v)
-                lines.append(f"{k} = {val}")
+                lines.append(f"  {k}: {v}")
 
-        return "\n".join(lines)
-
-    def summary(self):
-        logger.info(f"[bold cyan]Agent Summary[/bold cyan]\n{self.__repr__()}")
+        # 5. Join and Log
+        logger.info("\n".join(lines))
 
     @property
     def device(self):

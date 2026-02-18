@@ -7,6 +7,8 @@ class ReinforceConfig:
     gamma: float = 0.99
 
 class ReinforceAgent(BaseAgent):
+    _config_class = ReinforceConfig
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cfg = ReinforceConfig(
@@ -35,7 +37,7 @@ class ReinforceAgent(BaseAgent):
         if not data:
             return {}
 
-        self.tracker.reset()
+        self._tracker.reset()
 
         rewards = data["rewards"]
         # Calculate discounted returns
@@ -65,7 +67,7 @@ class ReinforceAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
 
-        self.tracker.store(loss=loss)
+        self._tracker.store(loss=loss)
 
         self.buffer.clear()
-        return self.tracker.result()
+        return self._tracker.result()

@@ -9,7 +9,7 @@ class PPOConfig(ACConfig):
     gae_lambda: float = 0.95
 
 class PPOAgent(ActorCriticAgent):
-    config_class = PPOConfig
+    _config_class = PPOConfig
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -26,7 +26,7 @@ class PPOAgent(ActorCriticAgent):
         rewards = data["rewards"]
         dones = data["dones"]
 
-        self.tracker.reset()
+        self._tracker.reset()
 
         # Generalized Advantage Estimation (GAE)
         advantages = []
@@ -73,7 +73,7 @@ class PPOAgent(ActorCriticAgent):
             loss.backward()
             self.optimizer.step()
 
-            self.tracker.store(
+            self._tracker.store(
                 loss=loss,
                 actor=actor_loss,
                 critic=critic_loss,
@@ -81,4 +81,4 @@ class PPOAgent(ActorCriticAgent):
             )
 
         self.buffer.clear()
-        return self.tracker.result()
+        return self._tracker.result()

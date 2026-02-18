@@ -9,15 +9,15 @@ class ACConfig:
     entropy_weight: float = 0.01
 
 class ActorCriticAgent(BaseAgent):
-    config_class = ACConfig
+    _config_class = ACConfig
 
     def __init__(self, **kwargs):
         critic_loss = kwargs.pop('critic_loss', torch.nn.MSELoss())
         super().__init__(**kwargs)
         self.critic_loss_fn = critic_loss
 
-        self.metric_weights['critic'] = self.cfg.critic_weight
-        self.metric_weights['entropy'] = -self.cfg.entropy_weight
+        self._metric_weights['critic'] = self.cfg.critic_weight
+        self._metric_weights['entropy'] = -self.cfg.entropy_weight
 
     def _acting(self, state, deterministic):
         features = self.encoder(state)
@@ -42,7 +42,7 @@ class ActorCriticAgent(BaseAgent):
         data = self.buffer.get_data(self.device)
         if not data: return {}
 
-        self.tracker.reset()
+        self._tracker.reset()
         rewards, dones, old_values = data["rewards"], data["dones"], data["values"]
 
         # Bootstrapped returns
@@ -81,7 +81,7 @@ class ActorCriticAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
 
-        self.tracker.store(
+        self._tracker.store(
             loss=loss,
             actor=actor_loss,
             critic=critic_loss,
@@ -89,4 +89,4 @@ class ActorCriticAgent(BaseAgent):
         )
 
         self.buffer.clear()
-        return self.tracker.result()
+        return self._tracker.result()
