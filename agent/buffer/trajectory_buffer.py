@@ -12,7 +12,7 @@ class TrajectoryBuffer(BaseBuffer):
         self.log_probs.append(self._to_tensor(info.get('log_prob')))
         self.values.append(self._to_tensor(info.get('value', 0.0)))
         self.rewards.append(torch.tensor(reward, dtype=torch.float32))
-        self.dones.append(torch.tensor(done, dtype=torch.bool))
+        self.dones.append(torch.tensor(done, dtype=torch.float32))
 
     def _to_tensor(self, val):
         if val is None:
