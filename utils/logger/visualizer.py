@@ -54,15 +54,15 @@ class Visualizer:
     def update_live(self, stats: dict):
         if not self.fig or not stats:
             return
-        
+
         current_x = stats['x']
         if len(current_x) == 0:
             return
 
         max_x = current_x[-1]
 
-        x_min = max(0, max_x - self.window_size)
-        x_max = x_min + self.window_size
+        base_min = max(1, max_x - self.window_size + 1)
+        base_max = base_min + self.window_size
 
         self.line_raw.set_data(stats['x'], stats['raw'])
         self.line_trend.set_data(stats['x'], stats['smoothed'])
@@ -104,9 +104,8 @@ class Visualizer:
                 color='tab:blue', alpha=0.12, zorder=2, linewidth=0
             )
 
-        x_min -= 0.01 * self.window_size
-        x_max += 0.01 * self.window_size
-        self.ax1.set_xlim(x_min, x_max)
+        padding = 0.05 * self.window_size
+        self.ax1.set_xlim(base_min - padding, base_max + padding)
         self.ax1.relim()
         self.ax1.autoscale_view(scalex=False, scaley=True)
         self.ax2.relim()
