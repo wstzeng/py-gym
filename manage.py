@@ -58,12 +58,16 @@ def run_train(args):
             dashboard=dashboard,
             env_kwargs=train_env_kwargs,
         )
-    finally:
-        # Final artifacts packing
-        agent.save_checkpoints(os.path.join(save_dir, "model.ckpt"))
-        config.save(os.path.join(save_dir, "config.json"))
-        dashboard.close()
-        logger.info(f"Results archived in: {save_dir}")
+    except KeyboardInterrupt:
+        logger.warning(f"Interuptted. Training log available in {save_dir}")
+        return
+
+    # Final artifacts packing
+    agent.save_checkpoints(os.path.join(save_dir, "model.ckpt"))
+    config.save(os.path.join(save_dir, "config.json"))
+    config.save(os.path.join(save_dir, "config.toml"))
+    dashboard.close()
+    logger.info(f"Results archived in: {save_dir}")
 
     # 5. Optional Evaluation
     if args.eval > 0:
