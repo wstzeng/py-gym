@@ -12,9 +12,8 @@ class ActorCriticAgent(BaseAgent):
     _config_class = ACConfig
 
     def __init__(self, **kwargs):
-        critic_loss = kwargs.pop('critic_loss', torch.nn.MSELoss())
         super().__init__(**kwargs)
-        self.critic_loss_fn = critic_loss
+        self.critic_loss_fn = kwargs['critic_loss']
 
         self._metric_weights['critic'] = self.cfg.critic_weight
         self._metric_weights['entropy'] = -self.cfg.entropy_weight

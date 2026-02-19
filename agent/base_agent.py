@@ -1,37 +1,14 @@
 # agents/base_agent.py
 from abc import ABC, abstractmethod
+from dataclasses import fields
+import numpy as np
 import torch
 from torch import nn
-from dataclasses import fields, is_dataclass, asdict
-import numpy as np
-import tomli_w
 import os
-from .buffer import BaseBuffer
 from utils.logger import logger
+from .buffer import BaseBuffer
+from .utils import MetricTracker, get_agent_summary
 
-class MetricTracker:
-    def __init__(self, weights: dict):
-        self.metric_weights = weights
-        self.reset()
-
-    def reset(self):
-        self._data = {}
-
-    def store(self, **metrics):
-        for k, v in metrics.items():
-            if k not in self._data:
-                self._data[k] = []
-            val = v.detach().cpu().item() if torch.is_tensor(v) else v
-
-            if k in self.metric_weights:
-                val *= self.metric_weights[k]
-
-            self._data[k].append(val)
-
-    def result(self) -> dict:
-        return {
-            k: sum(v) / len(v) for k, v in self._data.items() if len(v) > 0
-        }
 
 class BaseAgent(nn.Module, ABC):
     _config_class = None
@@ -61,26 +38,8 @@ class BaseAgent(nn.Module, ABC):
             )
 
     def summary(self):
-        lines = [f"[bold cyan][{self.__class__.__name__} Summary][/bold cyan]"]
-        
-        # 2. Metadata (Basic Info)
-        lines.append(f"Device: {self.device}")
-        lines.append(f"Optimizer: {self.optimizer.__class__.__name__ if self.optimizer else 'None'}")
-
-        # 3. Agent Structure (Full PyTorch Repr)
-        lines.append("\n[bold yellow][Model Architecture][/bold yellow]")
-        lines.append(str(self))
-
-        # 4. Config (Parameters)
-        if hasattr(self, 'cfg') and self.cfg is not None:
-            lines.append("\n[bold yellow][Configuration][/bold yellow]")
-            cfg_dict = asdict(self.cfg) if is_dataclass(self.cfg) else getattr(self.cfg, '__dict__', {})
-            cfg_dict = dict(sorted(cfg_dict.items()))
-            for k, v in cfg_dict.items():
-                lines.append(f"  {k}: {v}")
-
-        # 5. Join and Log
-        logger.info("\n".join(lines))
+        summary_text = get_agent_summary(self)
+        logger.info(summary_text)
 
     @property
     def device(self):
@@ -122,7 +81,10 @@ class BaseAgent(nn.Module, ABC):
         pass
 
     def save_checkpoints(self, path: str):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if not os.path.exists(os.path.dirname(path)):
+            logger.warning(f"{os.path.dirname(path)} not found for saving checkpoint")
+            return
+
         checkpoint = {
             name: module.state_dict()
             for name, module in self.named_children()
