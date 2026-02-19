@@ -27,8 +27,8 @@ class ReinforceAgent(BaseAgent):
         )
 
         info = {
-            "action": raw_action.detach().cpu().squeeze(0),
-            "log_prob": corrected_log_prob.detach().item(),
+            "action": raw_action.detach(),
+            "log_prob": corrected_log_prob.detach()
         }
         return raw_action, info
 
@@ -40,17 +40,16 @@ class ReinforceAgent(BaseAgent):
         self._tracker.reset()
 
         rewards = data["rewards"]
-        # Calculate discounted returns
-        returns = []
-        g = 0
-        for r in reversed(rewards):
-            g = r + self.cfg.gamma * g
-            returns.insert(0, g)
 
-        returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
+        returns = torch.zeros_like(rewards)
+        g = 0.0
+        for t in reversed(range(len(rewards))):
+            g = rewards[t] + self.cfg.gamma * g
+            returns[t] = g
+
         returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
-        # Re-calculate log probs for the batch
+        # Forward pass
         features = self.encoder(data["states"])
         dist = self.policy.get_distribution(features)
 

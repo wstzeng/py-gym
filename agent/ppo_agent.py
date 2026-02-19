@@ -22,22 +22,29 @@ class PPOAgent(ActorCriticAgent):
         old_states = data["states"]
         old_actions = data["actions"]
         old_log_probs = data["log_probs"]
-        old_values = data["values"]
+        old_values = data["values"].view(-1)
         rewards = data["rewards"]
         dones = data["dones"]
 
         self._tracker.reset()
 
-        # Generalized Advantage Estimation (GAE)
-        advantages = []
-        last_gae, next_value = 0, 0
-        for r, d, v in zip(reversed(rewards), reversed(dones), reversed(old_values)):
-            delta = r + self.cfg.gamma * next_value * (1 - d) - v.item()
-            gae = delta + self.cfg.gamma * self.cfg.gae_lambda * (1 - d) * last_gae
-            advantages.insert(0, gae)
-            last_gae, next_value = gae, v.item()
+        advantages = torch.zeros_like(rewards)
+        last_gae = 0.0
+        next_value = 0.0
 
-        advantages = torch.tensor(advantages, dtype=torch.float32, device=self.device)
+        for t in reversed(range(len(rewards))):
+            if t < len(rewards) - 1:
+                next_value = old_values[t + 1]
+            else:
+                next_value = 0.0
+
+            mask = 1.0 - dones[t]
+            delta = rewards[t] + self.cfg.gamma * next_value * mask - old_values[t]
+            gae = delta + self.cfg.gamma * self.cfg.gae_lambda * mask * last_gae
+            advantages[t] = gae
+            last_gae = gae
+
+        # Generalized Advantage Estimation (GAE)
         returns = advantages + old_values
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
@@ -47,14 +54,11 @@ class PPOAgent(ActorCriticAgent):
             curr_values = self.policy.get_value(features).view(-1)
 
             raw_log_probs = self.policy.handler.get_log_prob(dist, old_actions)
-
-            # Handler handles summation
             curr_log_probs = self.policy.handler.apply_correction(
                 raw_log_probs,
                 old_actions
             )
 
-            # PPO Clipped Objective
             ratio = torch.exp(curr_log_probs - old_log_probs)
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1 - self.cfg.eps_clip, 1 + self.cfg.eps_clip) * advantages

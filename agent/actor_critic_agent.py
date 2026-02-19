@@ -31,26 +31,31 @@ class ActorCriticAgent(BaseAgent):
         )
 
         info = {
-            "action": raw_action.detach().cpu().squeeze(0),
-            "log_prob": corrected_log_prob.detach().item(),
-            "value": self.policy.get_value(features).detach().item()
+            "action": raw_action.detach(),
+            "log_prob": corrected_log_prob.detach(),
+            "value": self.policy.get_value(features).detach()
         }
         return raw_action, info
 
     def update(self):
         data = self.buffer.get_data(self.device)
-        if not data: return {}
+        if not data:
+            return {}
 
         self._tracker.reset()
-        rewards, dones, old_values = data["rewards"], data["dones"], data["values"]
+        
+        # All data from buffer are now tensors on self.device
+        rewards = data["rewards"]
+        dones = data["dones"]
+        values = data["values"].view(-1)
 
-        # Bootstrapped returns
-        returns = []
-        g = old_values[-1].item() if not dones[-1] else 0
-        for r, d in zip(reversed(rewards), reversed(dones)):
-            g = r + self.cfg.gamma * g * (1 - d)
-            returns.insert(0, g)
-        returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
+        # Vectorized bootstrapped returns (more efficient than Python list)
+        returns = torch.zeros_like(rewards)
+        g = values[-1] if not dones[-1] else 0.0
+        
+        for t in reversed(range(len(rewards))):
+            g = rewards[t] + self.cfg.gamma * g * (1 - dones[t])
+            returns[t] = g
 
         # Forward pass
         features = self.encoder(data["states"])
