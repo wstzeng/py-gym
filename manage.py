@@ -60,6 +60,7 @@ def run_train(args):
         )
     except KeyboardInterrupt:
         logger.warning(f"Interuptted. Training log available in {save_dir}")
+        dashboard.close()
         return
 
     # Final artifacts packing
@@ -82,10 +83,15 @@ def run_train(args):
 
 def run_test(args):
     """Run evaluation from an existing experiment directory."""
-    config_path = os.path.join(args.exp_dir, "config.json")
+    toml_config_path = os.path.join(args.exp_dir, "config.toml")
+    json_config_path = os.path.join(args.exp_dir, "config.json")
     ckpt_path = os.path.join(args.exp_dir, "model.ckpt")
 
-    if not os.path.exists(config_path):
+    if os.path.exists(toml_config_path):
+        config_path = toml_config_path
+    elif os.path.exists(json_config_path):
+        config_path = json_config_path
+    else:
         raise FileNotFoundError(f"Config not found in {args.exp_dir}")
 
     config = AgentConfig.load(config_path)
