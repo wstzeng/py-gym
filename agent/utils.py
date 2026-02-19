@@ -28,7 +28,7 @@ def _get_optimizer_info(agent):
             (k == 'lr' or (k in defaults and v != defaults[k]))
         ]
         lines.append(f"  ({', '.join(hyper_params)}):\n    {label_str}")
-    return f"{opt.__class__.__name__}()\n" + "\n".join(lines)
+    return f"{opt.__class__.__name__}(\n" + "\n".join(lines) + "\n)"
 
 def get_agent_summary(agent: nn.Module) -> str:
     """Generate a clean markup summary string for an agent."""

@@ -234,5 +234,5 @@ def build_agent(
     )
 
     instance.to(torch.device(device))
-    instance.summary()
+    logger.info(instance.summary())
     return instance

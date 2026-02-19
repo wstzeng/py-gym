@@ -38,8 +38,7 @@ class BaseAgent(nn.Module, ABC):
             )
 
     def summary(self):
-        summary_text = get_agent_summary(self)
-        logger.info(summary_text)
+        return get_agent_summary(self)
 
     @property
     def device(self):
