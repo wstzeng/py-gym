@@ -6,8 +6,8 @@ import torch
 from torch import nn
 import os
 from utils.logger import logger
-from .buffer import BaseBuffer
-from .utils import MetricTracker, get_agent_summary
+from agent.buffer import BaseBuffer
+from agent.utils import MetricTracker, get_agent_summary
 
 
 class BaseAgent(nn.Module, ABC):

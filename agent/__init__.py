@@ -1,11 +1,3 @@
-from .base_agent import BaseAgent
-from .reinforce_agent import ReinforceAgent
-from .actor_critic_agent import ActorCriticAgent
-from .ppo_agent import PPOAgent
+from .entity import *
 
-__all__ = [
-    "BaseAgent",
-    "ReinforceAgent",
-    "ActorCriticAgent",
-    "PPOAgent",
-]
+__all__ = entity.__all__

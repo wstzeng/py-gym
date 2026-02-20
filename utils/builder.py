@@ -1,5 +1,6 @@
 import torch
 from torch import nn, optim
+import gymnasium as gym
 import agent
 import agent.encoder
 import agent.policy
@@ -189,9 +190,13 @@ def build_agent(
         config_dict: dict,
         device: str = 'cpu'
 ) -> any:
-    """Orchestrates the full agent construction process."""
+    """
+    Orchestrates the full agent construction process.
+    """
     # 1. Initialize components from state dimension
-    state_dim = config_dict['env']['state_dim']
+    env = gym.make(config_dict['env']['id'], **config_dict['env']['default'])
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
     components = {}
 
     for name, cfg in config_dict['agent']['components'].items():

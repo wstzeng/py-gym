@@ -3,10 +3,15 @@ from torch import nn
 from .base_encoder import BaseEncoder
 
 class VectorEncoder(BaseEncoder):
-    def __init__(self, network: nn.Module, input_dim: int = None, feature_dim: int = None):
+    def __init__(
+            self,
+            network: nn.Module,
+            input_dim: int = None,
+            feature_dim: int = None
+    ):
         super().__init__()
         self.net = network
-        
+
         if feature_dim is not None:
             self._feature_dim = feature_dim
         elif input_dim is not None:
