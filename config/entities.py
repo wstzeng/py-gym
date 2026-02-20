@@ -8,7 +8,6 @@ from pathlib import Path
 @dataclass
 class EnvConfig:
     id: str = None
-    state_dim: int = None
     default: dict = field(default_factory=dict)
     training: dict = field(default_factory=dict)
     testing: dict = field(default_factory=dict)
