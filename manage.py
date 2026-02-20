@@ -62,7 +62,7 @@ def run_train(args):
     except KeyboardInterrupt:
         dashboard.close()
         logger.warning(
-            "[bold red]Interuptted. [/bold red]"
+            "[bold red]Interrupted. [/bold red]"
             f"Training log available in {save_dir}"
         )
         return
