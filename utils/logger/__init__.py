@@ -1,8 +1,9 @@
-from .logger import logger, console
+from .logger import logger, console, setup_logger
 from .dashboard import Dashboard
 
 __all__ = [
     "logger",
     "console",
-    "Dashboard"
+    "Dashboard",
+    "setup_logger"
 ]

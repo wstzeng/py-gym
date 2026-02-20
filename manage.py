@@ -7,13 +7,14 @@ from config import AgentConfig
 from utils.builder import build_agent
 from utils.train import train_loop
 from utils.test import test_loop
-from utils.logger import logger, Dashboard
+from utils.logger import logger, setup_logger, Dashboard
 
 def get_base_parser():
     """Shared arguments for both train and test modes."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--device', type=str, default='cpu')
     parser.add_argument('--dry', action='store_true', help='Save to system temp directory')
+    parser.add_argument('--debug', action='store_true')
     return parser
 
 def run_train(args):
@@ -59,8 +60,11 @@ def run_train(args):
             env_kwargs=train_env_kwargs,
         )
     except KeyboardInterrupt:
-        logger.warning(f"Interuptted. Training log available in {save_dir}")
         dashboard.close()
+        logger.warning(
+            "[bold red]Interuptted. [/bold red]"
+            f"Training log available in {save_dir}"
+        )
         return
 
     # Final artifacts packing
@@ -146,6 +150,9 @@ if __name__ == '__main__':
     exp_p.add_argument('action', choices=['archive', 'list'])
 
     args = parser.parse_args()
+
+    level = "DEBUG" if args.debug else "INFO"
+    logger = setup_logger(level=level)
 
     modes = {
         'train': run_train,
