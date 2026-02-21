@@ -7,6 +7,10 @@ class BasePolicy(nn.Module, ABC):
         super().__init__()
         self.handler = handler
 
+    @classmethod
+    def sub_components(cls):
+        return ["handler"]
+
     @abstractmethod
     def forward(self, x):
         pass

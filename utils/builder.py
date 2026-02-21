@@ -77,7 +77,7 @@ def build_optimizer(
             module_dict[comp_name] = comp
             for child_name, child_module in comp.named_modules():
                 if child_name:
-                    module_dict[child_name] = child_module
+                    module_dict[f"{comp_name}.{child_name}"] = child_module
 
     param_groups = []
     seen_params = set()
@@ -137,6 +137,28 @@ def build_component(
     if cls is None:
         raise ValueError(f"Class {cls_type} not found in COMPONENT_REGISTRY.")
 
+    # Type B: Components containing sub-components
+    if hasattr(cls, 'sub_components'):
+        sub_component_list = cls.sub_components()
+        sub_components = {}
+
+        for sub_name in sub_component_list:
+            sub_cfg = cfg.get(sub_name)
+            if sub_cfg is None:
+                raise ValueError(f"Missing configuration for sub-component: {sub_name}")
+
+            feat_dim = sub_cfg.get('in_features', None)
+            sub_components[sub_name] = build_component(
+                sub_cfg,
+                input_dim=feat_dim
+            )
+
+        params = cfg.get('params', {}).copy()
+        return cls(
+            **sub_components,
+            **params
+        )
+
     # Type A: Components with internal networks
     if 'layers' in cfg:
         in_dim = cfg.get('input_dim', input_dim)
@@ -157,30 +179,6 @@ def build_component(
             **params
         )
 
-    # Type B: Components containing sub-components
-    elif 'components' in cfg:
-        sub_components = {}
-        feat_dim = cfg.get('feature_dim', input_dim)
-
-        for sub_name, sub_cfg in cfg['components'].items():
-            if isinstance(sub_cfg, list):
-                sub_net, _ = build_sequential(
-                    sub_cfg,
-                    feat_dim
-                )
-                sub_components[sub_name] = sub_net
-            else:
-                sub_components[sub_name] = build_component(
-                    sub_cfg,
-                    input_dim=feat_dim
-                )
-
-        params = cfg.get('params', {}).copy()
-        return cls(
-            **sub_components,
-            **params
-        )
-
     # Type C: Basic Components
     else:
         params = cfg.get('params', {}).copy()
@@ -197,13 +195,24 @@ def build_agent(
     env = gym.make(config_dict['env']['id'], **config_dict['env']['default'])
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
-    components = {}
+    env.close()
 
-    for name, cfg in config_dict['agent']['components'].items():
+    agent_cfg = config_dict['agent']
+    agent_type = agent_cfg['type']
+    agent_cls = COMPONENT_REGISTRY.get(agent_type)
+    del agent_cfg['type']
+    logger.debug(f"Building {agent_type}: {agent_cfg}")
+
+    if agent_cls is None:
+        raise ValueError(f"Agent class {agent_type} not registered.")
+
+    components = {}
+    for name, cfg in config_dict['agent'].items():
         components[name] = build_component(
             cfg,
             input_dim=state_dim
         )
+    logger.debug(f"Components: {components}")
 
     # 2. Setup optimizer and handle hyper-parameters
     trainable_modules = {
@@ -226,12 +235,6 @@ def build_agent(
                 hyper_params[key] = loss_cls()
 
     # 3. Assemble and return the final agent
-    agent_type = config_dict['agent']['type']
-    agent_cls = COMPONENT_REGISTRY.get(agent_type)
-
-    if agent_cls is None:
-        raise ValueError(f"Agent class {agent_type} not registered.")
-
     instance = agent_cls(
         **components,
         optimizer=optimizer,

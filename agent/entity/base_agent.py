@@ -36,6 +36,10 @@ class BaseAgent(nn.Module, ABC):
             self.cfg = self._config_class(
                 **{k: v for k, v in kwargs.items() if k in valid_fields}
             )
+    
+    @classmethod
+    def sub_components(cls):
+        return ["encoder", "buffer", "policy"]
 
     def summary(self):
         return get_agent_summary(self)

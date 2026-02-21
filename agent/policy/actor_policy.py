@@ -5,6 +5,10 @@ class ActorPolicy(BasePolicy):
         super().__init__(**kwargs)
         self.actor = actor
 
+    @classmethod
+    def sub_components(cls):
+        return super().sub_components() + ["actor"]
+
     def forward(self, x):
         return self.actor(x)
 

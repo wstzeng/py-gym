@@ -10,12 +10,16 @@ class ActorCriticPolicy(BasePolicy):
         self.actor = actor
         self.critic = critic
 
+    @classmethod
+    def sub_components(cls):
+        return super().sub_components() + ["actor", "critic"]
+
     def forward(self, x):
         """
         Forward pass returning both action distribution and state value.
         """
         return self.actor(x), self.critic(x)
-    
+
     def get_distribution(self, x):
         """
         Convenience method if only action is needed.

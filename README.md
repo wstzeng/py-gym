@@ -13,6 +13,7 @@ An object-oriented reinforcement learning framework focused on modularity and cl
 The framework follows a strict modular design:
 
 - **[Agent](agent/)**: Orchestrates decision-making and learning.
+    - **[Entity](agent/entity)**: Agent implementations.
     - **[Policy](agent/policy)**: Neural network architectures and action selection logic.
     - **[Buffer](agent/buffer)**: Experience replay or rollout storage management.
     - **[Encoder](agent/encoder)**: State representation learning and feature extraction.
@@ -30,7 +31,8 @@ Every training run generates a self-contained directory in `experiments/`:
 
 ```text
 experiments/ENV_TIMESTAMP/
-├── config.json       # Full configuration (arch + runtime params)
+├── config.toml       # Full configuration (arch + runtime params)
+├── config.json       # Same contents as `config.toml` in JSON format
 ├── model.ckpt        # Trained weights (nn.Module state_dict)
 ├── training_log.csv  # Step-by-step metrics (Reward, Loss)
 └── training_log.png  # Visualized performance curve
@@ -56,6 +58,10 @@ pip install -r requirements.txt
 ### 2. Basic Commands
 
 #### Train with configuration
+```bash
+python manage.py train <config_name>.toml
+```
+or
 ```bash
 python manage.py train <config_name>.json
 ```

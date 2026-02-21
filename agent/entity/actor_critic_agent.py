@@ -43,7 +43,7 @@ class ActorCriticAgent(BaseAgent):
             return {}
 
         self._tracker.reset()
-        
+
         # All data from buffer are now tensors on self.device
         rewards = data["rewards"]
         dones = data["dones"]
@@ -52,7 +52,7 @@ class ActorCriticAgent(BaseAgent):
         # Vectorized bootstrapped returns (more efficient than Python list)
         returns = torch.zeros_like(rewards)
         g = values[-1] if not dones[-1] else 0.0
-        
+
         for t in reversed(range(len(rewards))):
             g = rewards[t] + self.cfg.gamma * g * (1 - dones[t])
             returns[t] = g

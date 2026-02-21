@@ -13,14 +13,9 @@ class EnvConfig:
     testing: dict = field(default_factory=dict)
 
 @dataclass
-class AgentDetailConfig:
-    type: str = None
-    components: dict = field(default_factory=dict)
-
-@dataclass
 class AgentConfig:
     env: EnvConfig = field(default_factory=EnvConfig)
-    agent: AgentDetailConfig = field(default_factory=AgentDetailConfig)
+    agent: dict = field(default_factory=dict)
     hyper_params: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
 
@@ -92,9 +87,7 @@ class AgentConfig:
             env=EnvConfig(
                 **data.get('env', {})
             ),
-            agent=AgentDetailConfig(
-                **data.get('agent', {})
-            ),
+            agent=data.get('agent', {}),
             hyper_params=data.get('hyper_params', {}),
             metadata=data.get('metadata', {})
         )
