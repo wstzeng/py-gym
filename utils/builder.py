@@ -62,7 +62,9 @@ def build_optimizer(
         config_dict: dict,
         agent_components: dict
 ) -> optim.Optimizer:
-    """Configures optimizer with specific parameter groups and learning rates."""
+    """
+    Configures optimizer with specific parameter groups and learning rates.
+    """
     opt_cfg = config_dict['hyper_params']['optimizer']
     opt_cls = getattr(optim, opt_cfg['type'])
 
@@ -77,7 +79,7 @@ def build_optimizer(
             module_dict[comp_name] = comp
             for child_name, child_module in comp.named_modules():
                 if child_name:
-                    module_dict[f"{comp_name}.{child_name}"] = child_module
+                    module_dict[f"{child_name}"] = child_module
 
     param_groups = []
     seen_params = set()
