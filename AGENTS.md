@@ -9,10 +9,11 @@ commands from the repository root. There is no build step or installed package l
 - Requires Python >= 3.11 (`tomllib`); the default `python` here may be 3.10.
 - Install with `pip install -r requirements.txt`, or `poetry install` (README
   recommends running the Poetry install twice for PEP 517 build dependencies).
+- For tests with pip, use `pip install -r requirements-dev.txt`.
 - Training defaults to CPU; pass `--device cuda` when available.
 
 ## Commands
-- Train: `python manage.py train config/templates/cartpole_ppo.toml`
+- Train: `python manage.py train config/templates/lunarlander_ppo.toml`
   - TOML and JSON are both supported; the file extension selects the loader.
   - `-T/--iterations` (default 500), `-N/--episodes` (episodes per iteration),
     `--eval N`, `--device cpu|cuda`.
@@ -21,42 +22,42 @@ commands from the repository root. There is no build step or installed package l
 - Headless: `--record cli` avoids opening the live matplotlib window
   (the default is `cli live`).
 - Smoke test: `python manage.py train <config> --dry -T 1 -N 1`.
-  `--debug` only raises the log level.
-- Do not use the Poetry `train`/`test` scripts: `pyproject.toml` points them at
-  `utils.train:main` and `utils.test:main`, which do not exist.
-- There is no tracked test suite or CI. `pyproject.toml` declares pytest/black/ruff
-  dev dependencies but configures none of them; verify changes with a short
-  `--dry` run.
+  `--debug` implies `--dry` and enables verbose logging.
+- Tests: `pytest` (tests live in `tests/` and are tracked).
+- There is no CI or lint/format/typecheck configuration; run pytest plus a
+  short `--dry` training run as verification.
 
 ## Architecture
-- `agent/entity/`: agent implementations. `BaseAgent.select_action()` owns
-  numpy/tensor/device conversion, calls subclass `_acting()`, then
-  `_to_env_action()`. New agents must be exported in
-  `agent/entity/__init__.py::__all__`.
-- `agent/{encoder,policy,buffer}/`: composable modules. A policy owns `actor`,
-  `critic` (optional), and `handler`.
-- `utils/builder.py`: factory and component registry. The registry is assembled
-  from `__all__` of `agent`, `agent.encoder`, `agent.policy`,
-  `agent.policy.action_handler`, and `agent.buffer`. New classes must be exported
-  there; a new component module must also be imported in `utils/builder.py`.
-- Config structure: `[agent] type` plus `[agent.components.*]`. `type` selects
-  the class, `params` are constructor kwargs, and nested `components` tables are
-  injected as kwargs. `layers` builds `nn.Sequential`, infers
-  `Linear.in_features`, and injects `feature_dim`.
-- `policy.feature_dim` must match the encoder output dimension; downstream
-  actor/critic layers do not infer it.
-- `build_agent()` infers state dimension from `env.observation_space` at runtime;
-  the `env.state_dim` config value is not used.
-- Known issue: `build_agent()` indexes `env.action_space.shape[0]` although
-  `action_dim` is unused, so Discrete-action environments (including the CartPole
-  template) fail; prefer continuous-action configs or patch that line.
+- `agent/learner/`: agent implementations. `BaseAgent.select_action()` owns
+  numpy/tensor/device conversion, calls subclass `_act()`, then converts the raw
+  action through `policy.handler.to_env_format()`. New agents must be exported in
+  `agent/learner/__init__.py::__all__`.
+- `agent/components/{encoder,policy,buffer}/`: composable modules. A policy owns
+  `actor`, `critic` (optional), and `handler`.
+- `utils/builder.py`: factory and component registry.
+  - Registry is assembled from `__all__` of `agent`, the component packages,
+    and `action_handler`. New classes must be exported there; a new component
+    module must also be imported in `utils/builder.py`.
+  - `build_component()` returns `(component, output_dim)`. It builds
+    `sub_components()` recursively and threads the input dimension down, so
+    actor/critic layers usually do not need an explicit `input_dim`.
+  - `build_agent()` uses `agent_cls.sub_components()` as the component whitelist,
+    rejects unknown `[agent.*]` keys, passes `hyper_params` as a dict, and
+    resolves `hyper_params.criterion` into loss objects.
+- Config structure: `[agent] type` plus flat `[agent.<component>]` tables.
+  Do not use a `components` table.
+- Dimensions: encoder output `feature_dim` feeds policy actor/critic. Configs
+  must not define `state_dim`; it is inferred from `env.observation_space`.
+- Action handling: `NormalHandler` / `BetaHandler` apply action bounds in
+  `to_env_format()`; policy log-prob corrections include the scaling Jacobian.
 
 ## Config and artifacts
 - `env.default` is merged into both training and testing; `env.training` and
   `env.testing` override per mode.
 - Example configs live in `config/templates/`; add new recipes there.
+  `config/draft/` is gitignored.
 - A completed run writes `experiments/{env.id}_{timestamp}/` with `config.toml`,
-  `config.json`, `model.ckpt`, and `training_log.csv/png`. Ctrl-C intentionally
-  skips config and checkpoint saving.
-- Docs drift: README links `configs/Config.md` (actual path is `config/Config.md`)
-  and shows only JSON; trust `manage.py` and the config templates.
+  `config.json`, `model.ckpt` (including optimizer state), and
+  `training_log.csv/png`. Ctrl-C intentionally skips config and checkpoint saving.
+- Docs drift is possible; trust `manage.py`, the config templates, and the
+  builder contract above.

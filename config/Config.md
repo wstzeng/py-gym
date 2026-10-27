@@ -1,60 +1,146 @@
 # Configuration Specification
 
-This project uses a component-based configuration system.
-Each component is instantiated via the [`builder.py`](../utils/builder.py) using the following schema:
+This project uses a component-based configuration system. Components are
+instantiated by [`utils/builder.py`](../utils/builder.py) from the following
+schema:
+
 - `type`: The class name of the component.
 - `params`: Arguments passed to the class constructor.
-- `components`: Nested sub-components to be instantiated and injected.
+- Sub-components: Declared directly under their parent, for example
+  `[agent.policy.actor]` or `[agent.policy.handler]`.
+
+The builder discovers component classes from the `__all__` exports of
+`agent`, `agent.components.encoder`, `agent.components.policy`,
+`agent.components.policy.action_handler`, and `agent.components.buffer`.
 
 ---
 
 ## 1. Environment (`env`)
+
 Defines the Gymnasium environment settings.
 
 | Field | Description |
 | :--- | :--- |
-| `id` | Environment ID (e.g., "CartPole-v1"). |
-| `state_dim` | Input dimension for the encoder. |
+| `id` | Environment ID (e.g., `"CartPole-v1"`). |
 | `default` | General environment settings. |
 | `training` | Settings specifically for the training environment. |
-| `testing` | Settings specifically for the evaluation environment (e.g., `render_mode`). |
+| `testing` | Settings specifically for evaluation (e.g., `render_mode`). |
+
+`env.default` is merged into both training and testing; `env.training` and
+`env.testing` add or override values for their respective modes.
+
+The state dimension is inferred at build time from
+`env.observation_space`; do not put `state_dim` in the config.
 
 ---
 
-## 2. Agent ([`agent`](../agent))
-The high-level agent structure.
+## 2. Agent (`agent`)
+
+The high-level agent is selected with `[agent] type`. Its components are
+declared directly under `[agent]`, one table per component.
+
+```toml
+[agent]
+type = "PPOAgent"
+
+[agent.encoder]
+type = "VectorEncoder"
+layers = [
+    { type = "Linear", out_features = 64 },
+    { type = "LeakyReLU" },
+]
+
+[agent.policy]
+type = "ActorCriticPolicy"
+
+[agent.policy.handler]
+type = "NormalHandler"
+
+[agent.policy.handler.params]
+action_dim = 2
+action_low = -1.0
+action_high = 1.0
+
+[agent.policy.actor]
+type = "Sequential"
+layers = [{ type = "Linear", out_features = 2 }]
+
+[agent.policy.critic]
+type = "Sequential"
+layers = [
+    { type = "Linear", out_features = 32 },
+    { type = "LeakyReLU" },
+    { type = "Linear", out_features = 1 },
+]
+
+[agent.buffer]
+type = "TrajectoryBuffer"
+```
 
 ### Components
-- **[`encoder`](../agent/encoder)**: Transforms raw states into latent features.
-    - `layers`: A list of layer definitions (Linear, ReLU, etc.) directly under the component.
-- **[`policy`](../agent/policy)**: Reasoning core. Contains `actor`, `critic` (optional), and `handler`.
-    - **[`handler`](../agent/policy/action_handler.py)**: Standardizes action space logic.
-        | Handler Type | Required `params` | Actor Output Dim Requirement |
-        | :--- | :--- | :--- |
-        | `CategoricalHandler` | `action_dim` | `action_dim` |
-        | `NormalHandler` | `action_dim`, `action_low`, `action_high` | `action_dim` |
-        | `BetaHandler` | `action_dim`, `action_low`, `action_high` | `action_dim * 2` |
-- **[`buffer`](../agent/buffer)**: Storage for experiences (e.g., `TrajectoryBuffer`).
+
+- **`encoder`**: Transforms raw states into latent features.
+    - `layers`: Layer definitions for `VectorEncoder`.
+    - The encoder's output `feature_dim` is passed to the policy automatically.
+- **`policy`**: Distribution and value heads.
+    - `actor`: Network producing distribution parameters.
+    - `critic`: Optional value network for actor-critic algorithms.
+    - `handler`: Converts policy outputs into environment actions.
+- **`buffer`**: Rollout storage (currently `TrajectoryBuffer`).
+
+### Action Handlers
+
+Handler implementations live in
+[`agent/components/policy/action_handler.py`](../agent/components/policy/action_handler.py).
+
+| Handler Type | Required `params` | Actor Output Dim Requirement |
+| :--- | :--- | :--- |
+| `CategoricalHandler` | `action_dim` | `action_dim` |
+| `NormalHandler` | `action_dim`, `action_low`, `action_high` | `action_dim` |
+| `BetaHandler` | `action_dim`, `action_low`, `action_high` | `action_dim * 2` |
+
+### Dimension Flow
+
+- `Linear` layers infer `in_features` from the component's `input_dim` (or from
+  the parent component).
+- Encode output feeds the policy; actor and critic receive the encoder's
+  `feature_dim` automatically.
+- If a component needs a different input dimension, set `input_dim` explicitly
+  on that component.
+- `feature_dim` is auto-detected for network-backed components but can be
+  overridden in config.
 
 ---
 
 ## 3. Hyper Parameters (`hyper_params`)
+
 Global training settings and optimization.
 
 ### Optimizer
-Matches the standard component schema:
-- `type`: Optimizer class (e.g., "AdamW", "Adam").
-- `params`:
-    - `lrs`: Dictionary mapping component/module names to learning rates.
-        - Must include a `default` key.
-        - Optional: specific keys (e.g., `critic`, `encoder`) to override default.
-    - `weight_decay`: L2 regularization coefficient.
-    - (Other standard PyTorch optimizer arguments like `betas`, `eps`).
+
+```toml
+[hyper_params.optimizer]
+type = "AdamW"
+
+[hyper_params.optimizer.params]
+weight_decay = 0.01
+lrs = { default = 0.001, actor = 0.0001 }
+```
+
+- `type`: Optimizer class from `torch.optim`.
+- `lrs`: Learning rates keyed by module name. `default` is required when using
+  per-module overrides; named keys (e.g., `actor`, `critic`, `encoder`) receive
+  their own parameter group.
+- Other keys are forwarded to the optimizer constructor.
 
 ### Algorithm Specifics
+
 - `gamma`: Discount factor for future rewards.
-- `entropy_weight`: Weight for the entropy bonus to encourage exploration.
-- `eps_clip`: (PPO only) Clipping range for the objective function.
-- `k_epochs`: (PPO only) Number of update iterations per batch.
-- `critic_weight`: Importance weight for the value loss in Actor-Critic setups.
-- `criterion`: Dictionary specifying loss functions (e.g., `"critic_loss": "MSELoss"`).
+- `entropy_weight`: Weight for the entropy bonus.
+- `eps_clip`: (PPO only) Clipping range for the objective.
+- `k_epochs`: (PPO only) Update iterations per batch.
+- `critic_weight`: Weight for the value loss.
+- `gae_lambda`: (PPO / actor-critic) GAE smoothing parameter.
+- `criterion`: Loss-function mapping, for example
+  `[hyper_params.criterion] critic_loss = "MSELoss"`. Values are resolved from
+  `torch.nn` and passed to the agent as keyword arguments.
