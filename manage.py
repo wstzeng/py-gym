@@ -151,7 +151,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    level = "DEBUG" if args.debug else "INFO"
+    level = 'INFO'
+    if args.debug:
+        level = 'DEBUG'
+        args.dry = True
     logger = setup_logger(level=level)
 
     modes = {

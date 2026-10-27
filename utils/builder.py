@@ -1,26 +1,28 @@
+import copy
+
+import gymnasium as gym
 import torch
 from torch import nn, optim
-import gymnasium as gym
+
 import agent
-import agent.encoder
-import agent.policy
-import agent.policy.action_handler
-import agent.buffer
+import agent.components.buffer
+import agent.components.encoder
+import agent.components.policy
+import agent.components.policy.action_handler
 from utils.logger import logger
 
+
 def get_component_registry() -> dict:
-    # Build registry from sub-modules' __all__
     registry = {
         "Sequential": nn.Sequential,
     }
 
-    # Modules to scan for exported classes
     modules = [
         agent,
-        agent.encoder,
-        agent.policy,
-        agent.policy.action_handler,
-        agent.buffer
+        agent.components.encoder,
+        agent.components.policy,
+        agent.components.policy.action_handler,
+        agent.components.buffer,
     ]
 
     for mod in modules:
@@ -32,45 +34,50 @@ def get_component_registry() -> dict:
 
     return registry
 
-# Initialize the internal registry
+
 COMPONENT_REGISTRY = get_component_registry()
+
 
 def build_sequential(
         layer_configs: list,
-        input_dim: int
-) -> tuple[nn.Module, float]:
-    """Creates a sequential module and detects output dimension."""
+        input_dim: int = None
+) -> tuple[nn.Module, int]:
+    """Build a sequential network and return its output dimension."""
     layers = []
     current_dim = input_dim
+
     for cfg in layer_configs:
-        # Get layer from torch.nn namespace
         layer_type = getattr(nn, cfg['type'])
         params = {k: v for k, v in cfg.items() if k != 'type'}
+        params.pop('in_features', None)
 
-        if layer_type == nn.Linear:
-            layer = layer_type(
-                in_features=current_dim,
-                **params
-            )
+        if layer_type is nn.Linear:
+            if current_dim is None:
+                raise ValueError(
+                    "Cannot infer input dimension for Linear layer. "
+                    "Provide input_dim on the component or its parent."
+                )
+            layer = layer_type(in_features=current_dim, **params)
             current_dim = params['out_features']
         else:
             layer = layer_type(**params)
+
         layers.append(layer)
+
     return nn.Sequential(*layers), current_dim
 
+
 def build_optimizer(
-        config_dict: dict,
+        optimizer_cfg: dict,
         agent_components: dict
 ) -> optim.Optimizer:
-    """Configures optimizer with specific parameter groups and learning rates."""
-    opt_cfg = config_dict['hyper_params']['optimizer']
-    opt_cls = getattr(optim, opt_cfg['type'])
-
-    opt_params = opt_cfg.get('params', {})
+    """Build an optimizer with optional per-module learning rates."""
+    opt_cls = getattr(optim, optimizer_cfg['type'])
+    opt_params = optimizer_cfg.get('params', {})
     lrs_cfg = opt_params.get('lrs', {})
     default_lr = lrs_cfg.get('default', 1e-3)
 
-    # Map all modules and sub-modules for parameter grouping
+    # Map module names to modules so lrs can target nested components.
     module_dict = {}
     for comp_name, comp in agent_components.items():
         if isinstance(comp, nn.Module):
@@ -82,162 +89,181 @@ def build_optimizer(
     param_groups = []
     seen_params = set()
 
-    # Assign specific learning rates to targeted modules
     for target_name, lr in lrs_cfg.items():
-        if target_name != 'default' and target_name in module_dict:
-            target_module = module_dict[target_name]
-            params_to_add = [p for p in target_module.parameters() if p not in seen_params]
-            if params_to_add:
-                param_groups.append({
-                    'params': params_to_add,
-                    'lr': lr
-                })
-                seen_params.update(params_to_add)
+        if target_name == 'default' or target_name not in module_dict:
+            continue
 
-    # Collect remaining parameters for default learning rate
+        target_module = module_dict[target_name]
+        params_to_add = [
+            p for p in target_module.parameters()
+            if p not in seen_params
+        ]
+        if params_to_add:
+            param_groups.append({
+                'params': params_to_add,
+                'lr': lr,
+            })
+            seen_params.update(params_to_add)
+
     remaining_params = []
     for comp in agent_components.values():
         if isinstance(comp, nn.Module):
             remaining_params.extend(
-                [p for p in comp.parameters() if p not in seen_params]
+                p for p in comp.parameters()
+                if p not in seen_params
             )
 
     if remaining_params:
         param_groups.append({
             'params': remaining_params,
-            'lr': default_lr
+            'lr': default_lr,
         })
 
-    base_params = {k: v for k, v in opt_params.items() if k != 'lrs'}
+    if not param_groups:
+        raise ValueError("No trainable parameters found for optimizer.")
 
-    return opt_cls(
-        param_groups,
-        **base_params
-    )
+    base_params = {
+        k: v for k, v in opt_params.items()
+        if k != 'lrs'
+    }
+    return opt_cls(param_groups, **base_params)
 
-def get_criterion(name: str):
-    """Retrieves a loss function by name from torch namespaces."""
-    if not name: return None
-    if hasattr(torch.nn.functional, name):
-        return getattr(torch.nn.functional, name)
-    if hasattr(torch, name):
-        return getattr(torch, name)
-    cls = getattr(nn, name, None)
-    return cls() if cls else None
 
 def build_component(
         cfg: dict,
         input_dim: int = None
-) -> any:
-    """Recursively builds components from registry instead of globals."""
+) -> tuple[object, int]:
+    """
+    Recursively build a component from config.
+
+    Returns the component and its output dimension when it can be inferred.
+    Sub-components inherit ``input_dim`` unless they provide their own
+    ``input_dim``; this lets encoder -> policy -> buffer dimensions flow
+    through the config without repeating them.
+    """
+    if not isinstance(cfg, dict):
+        raise ValueError(f"Component config must be a dict, got: {type(cfg)}")
+
     cls_type = cfg.get('type')
-    # Safe lookup from registry
     cls = COMPONENT_REGISTRY.get(cls_type)
 
     if cls is None:
-        raise ValueError(f"Class {cls_type} not found in COMPONENT_REGISTRY.")
+        raise ValueError(
+            f"Class {cls_type!r} not found in COMPONENT_REGISTRY. "
+            f"Export it in the package __all__."
+        )
 
-    # Type A: Components with internal networks
+    params = dict(cfg.get('params', {}))
+
+    # Components containing named sub-components.
+    if hasattr(cls, 'sub_components'):
+        sub_components = {}
+        for sub_name in cls.sub_components():
+            sub_cfg = cfg.get(sub_name)
+            if sub_cfg is None:
+                raise ValueError(
+                    f"{cls_type} requires sub-component {sub_name!r}."
+                )
+            sub_components[sub_name], _ = build_component(
+                sub_cfg,
+                input_dim=input_dim,
+            )
+
+        instance = cls(**sub_components, **params)
+        return instance, getattr(instance, 'feature_dim', None)
+
+    # Components with an internal sequential network.
     if 'layers' in cfg:
         in_dim = cfg.get('input_dim', input_dim)
-        net, out_dim = build_sequential(
-            cfg['layers'],
-            in_dim
-        )
+        network, out_dim = build_sequential(cfg['layers'], in_dim)
 
-        if cls == nn.Sequential:
-            return net
+        if cls is nn.Sequential:
+            return network, out_dim
 
-        params = cfg.get('params', {}).copy()
-        if 'feature_dim' not in params:
-            params['feature_dim'] = out_dim
+        params.setdefault('feature_dim', cfg.get('feature_dim', out_dim))
+        instance = cls(network=network, **params)
+        return instance, getattr(instance, 'feature_dim', out_dim)
 
-        return cls(
-            network=net,
-            **params
-        )
+    # Basic components such as buffers and action handlers.
+    instance = cls(**params)
+    return instance, getattr(instance, 'feature_dim', None)
 
-    # Type B: Components containing sub-components
-    elif 'components' in cfg:
-        sub_components = {}
-        feat_dim = cfg.get('feature_dim', input_dim)
-
-        for sub_name, sub_cfg in cfg['components'].items():
-            if isinstance(sub_cfg, list):
-                sub_net, _ = build_sequential(
-                    sub_cfg,
-                    feat_dim
-                )
-                sub_components[sub_name] = sub_net
-            else:
-                sub_components[sub_name] = build_component(
-                    sub_cfg,
-                    input_dim=feat_dim
-                )
-
-        params = cfg.get('params', {}).copy()
-        return cls(
-            **sub_components,
-            **params
-        )
-
-    # Type C: Basic Components
-    else:
-        params = cfg.get('params', {}).copy()
-        return cls(**params)
 
 def build_agent(
         config_dict: dict,
         device: str = 'cpu'
-) -> any:
-    """
-    Orchestrates the full agent construction process.
-    """
-    # 1. Initialize components from state dimension
-    env = gym.make(config_dict['env']['id'], **config_dict['env']['default'])
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-    components = {}
+) -> object:
+    """Build a complete agent from a parsed configuration dictionary."""
+    config = copy.deepcopy(config_dict)
+    env_cfg = config['env']
 
-    for name, cfg in config_dict['agent']['components'].items():
-        components[name] = build_component(
-            cfg,
-            input_dim=state_dim
-        )
+    env = gym.make(env_cfg['id'], **env_cfg.get('default', {}))
+    try:
+        if env.observation_space.shape is None:
+            raise ValueError(
+                f"Cannot infer state dimension from {env_cfg['id']}."
+            )
+        state_dim = env.observation_space.shape[0]
+    finally:
+        env.close()
 
-    # 2. Setup optimizer and handle hyper-parameters
-    trainable_modules = {
-        k: v for k, v in components.items() if isinstance(v, nn.Module)
-    }
-    optimizer = build_optimizer(
-        config_dict,
-        trainable_modules
-    )
-
-    hyper_params = config_dict.get('hyper_params', {}).copy()
-    if 'optimizer' in hyper_params:
-        del hyper_params['optimizer']
-
-    if 'criterion' in hyper_params:
-        criteria_cfg = hyper_params.pop('criterion')
-        for key, loss_name in criteria_cfg.items():
-            if loss_name:
-                loss_cls = getattr(nn, loss_name)
-                hyper_params[key] = loss_cls()
-
-    # 3. Assemble and return the final agent
-    agent_type = config_dict['agent']['type']
+    agent_cfg = config['agent']
+    agent_type = agent_cfg.pop('type', None)
     agent_cls = COMPONENT_REGISTRY.get(agent_type)
 
     if agent_cls is None:
-        raise ValueError(f"Agent class {agent_type} not registered.")
+        raise ValueError(
+            f"Agent class {agent_type!r} not found in COMPONENT_REGISTRY."
+        )
+
+    component_names = list(agent_cls.sub_components())
+    unknown_keys = set(agent_cfg) - set(component_names)
+    if unknown_keys:
+        raise ValueError(
+            f"Unknown agent config keys: {sorted(unknown_keys)}. "
+            f"Expected: {component_names}"
+        )
+
+    components = {}
+    input_dim = state_dim
+    for name in component_names:
+        if name not in agent_cfg:
+            raise ValueError(
+                f"{agent_type} requires agent component {name!r}."
+            )
+
+        component, output_dim = build_component(
+            agent_cfg[name],
+            input_dim=input_dim,
+        )
+        components[name] = component
+
+        if output_dim is not None:
+            input_dim = output_dim
+
+    hyper_params = dict(config.get('hyper_params', {}))
+    optimizer_cfg = hyper_params.pop('optimizer', None)
+    if optimizer_cfg is None:
+        raise ValueError("Missing hyper_params.optimizer config.")
+
+    criteria_cfg = hyper_params.pop('criterion', {})
+    criteria = {}
+    for key, loss_name in criteria_cfg.items():
+        if not loss_name:
+            continue
+        loss_cls = getattr(nn, loss_name, None)
+        if loss_cls is None:
+            raise ValueError(f"Unknown loss function: {loss_name!r}")
+        criteria[key] = loss_cls()
+
+    optimizer = build_optimizer(optimizer_cfg, components)
 
     instance = agent_cls(
         **components,
         optimizer=optimizer,
-        **hyper_params
+        hyper_params=hyper_params,
+        **criteria,
     )
-
     instance.to(torch.device(device))
     logger.info(instance.summary())
     return instance

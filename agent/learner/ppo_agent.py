@@ -1,15 +1,12 @@
 import torch
-from dataclasses import dataclass
-from .actor_critic_agent import ActorCriticAgent, ACConfig
-
-@dataclass
-class PPOConfig(ACConfig):
-    eps_clip: float = 0.2
-    k_epochs: int = 10
-    gae_lambda: float = 0.95
+from .actor_critic_agent import ActorCriticAgent
 
 class PPOAgent(ActorCriticAgent):
-    _config_class = PPOConfig
+    _default_hyper_params = {
+        **ActorCriticAgent._default_hyper_params,
+        'k_epochs': 10,
+        'eps_clip': 0.2
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -39,16 +36,18 @@ class PPOAgent(ActorCriticAgent):
                 next_value = 0.0
 
             mask = 1.0 - dones[t]
-            delta = rewards[t] + self.cfg.gamma * next_value * mask - old_values[t]
-            gae = delta + self.cfg.gamma * self.cfg.gae_lambda * mask * last_gae
+            delta = rewards[t] + self.gamma * next_value * mask - old_values[t]
+            gae = delta + self.gamma * self.gae_lambda * mask * last_gae
             advantages[t] = gae
             last_gae = gae
 
         # Generalized Advantage Estimation (GAE)
         returns = advantages + old_values
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        advantages = (
+            advantages - advantages.mean()
+        ) / (advantages.std(unbiased=False) + 1e-8)
 
-        for _ in range(self.cfg.k_epochs):
+        for _ in range(self.k_epochs):
             features = self.encoder(old_states)
             dist = self.policy.get_distribution(features)
             curr_values = self.policy.get_value(features).view(-1)
@@ -61,7 +60,7 @@ class PPOAgent(ActorCriticAgent):
 
             ratio = torch.exp(curr_log_probs - old_log_probs)
             surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1 - self.cfg.eps_clip, 1 + self.cfg.eps_clip) * advantages
+            surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
 
             actor_loss = -torch.min(surr1, surr2).mean()
             critic_loss = self.critic_loss_fn(curr_values, returns)
@@ -71,7 +70,7 @@ class PPOAgent(ActorCriticAgent):
                 entropy = entropy.sum(dim=-1)
             entropy = entropy.mean()
 
-            loss = actor_loss + self.cfg.critic_weight * critic_loss - self.cfg.entropy_weight * entropy
+            loss = actor_loss + self.critic_weight * critic_loss - self.entropy_weight * entropy
 
             self.optimizer.zero_grad()
             loss.backward()

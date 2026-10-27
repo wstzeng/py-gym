@@ -25,6 +25,11 @@ backup/
 *.tar.gz
 *.ckpt
 
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Poetry artifacts
 .cache/
 
@@ -34,9 +39,6 @@ Thumbs.db
 
 # This is for `tree --gitignore` output
 */__pycache__/
-
-# Tests
-tests/
 
 # Experiments and temporary artifacts
 experiments/
