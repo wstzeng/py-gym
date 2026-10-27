@@ -66,11 +66,14 @@ experiments/ENV_TIMESTAMP/
 
 ### 1. Installation
 
-Python 3.11 or newer is required.
+Python 3.11 or newer is required. The base install only covers environments that
+do not need Box2D; see [Box2D environments](#box2d-environments-optional) below
+for `LunarLander-v3` and friends.
 
 > **Note**: The dual-stage Poetry installation is a workaround for packages that
 > do not fully comply with PEP 517. Running it twice ensures build dependencies
-> are available before legacy build backends run.
+> are available before legacy build backends run. It does not replace system
+> tools such as `swig`.
 
 #### Using Poetry
 
@@ -91,12 +94,36 @@ For the test suite, install the development requirements:
 pip install -r requirements-dev.txt
 ```
 
+#### Box2D environments (optional)
+
+Environments backed by Box2D need the `swig` build tool **on `PATH` before the
+Python packages are built**. Installing the `swig` package from PyPI does not
+work, because build isolation hides it from the compiler.
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install -y swig
+# macOS
+brew install swig
+```
+
+Then install the Box2D extra:
+
+```bash
+pip install 'gymnasium[box2d]'      # pip
+poetry install --extras box2d       # poetry
+```
+
+`LunarLander-v3` is this project's reference Box2D environment: if its template
+runs, the Box2D toolchain is working. Other Box2D environments use the same
+setup.
+
 ### 2. Basic Commands
 
 Train with a configuration:
 
 ```bash
-python manage.py train config/templates/lunarlander_ppo.toml
+python manage.py train config/templates/cartpole_ppo.toml
 ```
 
 `toml` and `json` configs are both supported. Useful flags:
@@ -113,6 +140,9 @@ python manage.py train config/templates/cartpole_ppo.toml \
 - `--dry`: write artifacts to a temporary directory.
 - `--debug`: verbose logging; also implies `--dry`.
 
+The Box2D reference recipe is `config/templates/lunarlander_ppo.toml` (needs the
+Box2D extra described above).
+
 Test a trained model:
 
 ```bash
@@ -122,8 +152,12 @@ python manage.py test experiments/<experiment_directory>
 Run the tests:
 
 ```bash
-pytest
+pytest                      # everything; Box2D cases skip if unavailable
+pytest -m "not integration" # fast tests only
 ```
+
+On a machine with many cores, keep the CPU footprint small with
+`OMP_NUM_THREADS=1 taskset -c 0-1 pytest`.
 
 ## Project Status
 

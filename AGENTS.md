@@ -10,6 +10,10 @@ commands from the repository root. There is no build step or installed package l
 - Install with `pip install -r requirements.txt`, or `poetry install` (README
   recommends running the Poetry install twice for PEP 517 build dependencies).
 - For tests with pip, use `pip install -r requirements-dev.txt`.
+- Box2D environments (`LunarLander-v3` is the reference one) need the system
+  `swig` on PATH *before* the `box2d` extra is built (`sudo apt-get install -y
+  swig`). The PyPI `swig` package does not satisfy build isolation. Without it,
+  Box2D tests skip instead of failing.
 - Training defaults to CPU; pass `--device cuda` when available.
 
 ## Commands
@@ -24,6 +28,9 @@ commands from the repository root. There is no build step or installed package l
 - Smoke test: `python manage.py train <config> --dry -T 1 -N 1`.
   `--debug` implies `--dry` and enables verbose logging.
 - Tests: `pytest` (tests live in `tests/` and are tracked).
+  - `tests/test_templates_smoke.py` is marked `integration`: it builds every
+    template and steps its env. Box2D cases skip when `Box2D` is missing.
+  - `pytest -m "not integration"` runs the fast, dependency-light subset.
 - There is no CI or lint/format/typecheck configuration; run pytest plus a
   short `--dry` training run as verification.
 
