@@ -9,20 +9,22 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "swig (>=4.0.0)",
-    "torch (>=2.6.0,<3.0.0)",
     "numpy (>=1.26.4,<2.0.0)",
     "matplotlib (>=3.10.1,<4.0.0)",
     "gymnasium[box2d] (>=1.1.1,<2.0.0)",
     "setuptools (>=65.0.0,<70.0.0)",
     "rich (>=14.2.0,<15.0.0)",
     "tomli-w (>=1.2.0,<2.0.0)",
+    "torch (==2.6.0+cpu) ; extra != 'cuda'",
 ]
 
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+[project.optional-dependencies]
+cuda = [
+    "torch (==2.6.0+cu124)",
+]
 
 [tool.poetry]
+package-mode = false
 packages = [
     { include = "agent" },
     { include = "utils" }
@@ -30,9 +32,26 @@ packages = [
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1"
-black = "^24.3"
-ruff = "^0.4"
 
-[tool.poetry.scripts]
-train = "utils.train:main"
-test = "utils.test:main"
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.poetry.dependencies]
+torch = [
+    { markers = "extra != 'cuda'", source = "pytorch-cpu"},
+    { markers = "extra == 'cuda'", source = "pytorch-cuda"},
+ ]
+
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
+[[tool.poetry.source]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu124"
+priority = "explicit"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
