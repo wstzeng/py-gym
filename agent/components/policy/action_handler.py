@@ -66,6 +66,7 @@ class ContinuousActionHandler(BaseActionHandler):
         return dist.log_prob(action)
 
     def to_env_format(self, action):
+        action = self.post_process(action)
         act_np = action.detach().cpu().numpy()
         return act_np[0] if act_np.shape[0] == 1 else act_np
 
@@ -96,8 +97,11 @@ class NormalHandler(ContinuousActionHandler):
         return ((squashed + 1) / 2 * (self.high - self.low) + self.low).detach()
 
     def apply_correction(self, log_prob, raw_action):
-        correction = torch.log(1 - torch.tanh(raw_action).pow(2) + self.eps)
-        return (log_prob - correction).sum(dim=-1)
+        squash_correction = torch.log(
+            1 - torch.tanh(raw_action).pow(2) + self.eps
+        )
+        scale_correction = torch.log((self.high - self.low) / 2)
+        return (log_prob - squash_correction - scale_correction).sum(dim=-1)
 
 class BetaHandler(ContinuousActionHandler):
     def __init__(
@@ -126,4 +130,5 @@ class BetaHandler(ContinuousActionHandler):
         return (action * (self.high - self.low) + self.low).detach()
 
     def apply_correction(self, log_prob, raw_action):
-        return log_prob.sum(dim=-1)
+        scale_correction = torch.log(self.high - self.low)
+        return (log_prob - scale_correction).sum(dim=-1)

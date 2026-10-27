@@ -29,19 +29,17 @@ class AgentConfig:
 
     def save_json(self, path: str):
         """Saves configuration to a JSON file."""
-        os.makedirs(
-            os.path.dirname(path),
-            exist_ok=True
-        )
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(path, 'w') as f:
             json.dump(asdict(self), f, indent=4)
 
     def save_toml(self, path: str):
         """Saves configuration to a TOML file using tomli-w."""
-        os.makedirs(
-            os.path.dirname(path),
-            exist_ok=True
-        )
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         # tomli-w uses binary mode
         with open(path, 'wb') as f:
             tomli_w.dump(asdict(self), f)
@@ -82,11 +80,13 @@ class AgentConfig:
     @classmethod
     def _from_dict(cls, data: dict):
         """Helper to create an instance from a dictionary."""
-        # Using separate params for each field to match coding style
+        try:
+            env = EnvConfig(**data.get('env', {}))
+        except TypeError as exc:
+            raise ValueError(f"Invalid env config: {exc}") from exc
+
         return cls(
-            env=EnvConfig(
-                **data.get('env', {})
-            ),
+            env=env,
             agent=data.get('agent', {}),
             hyper_params=data.get('hyper_params', {}),
             metadata=data.get('metadata', {})

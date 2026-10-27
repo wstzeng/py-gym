@@ -1,21 +1,13 @@
 import torch
-from dataclasses import dataclass
-from .base_agent import BaseAgent
 
-@dataclass
-class ReinforceConfig:
-    gamma: float = 0.99
+from .policy_gradient_agent import PolicyGradientAgent
 
-class ReinforceAgent(BaseAgent):
-    _config_class = ReinforceConfig
 
+class ReinforceAgent(PolicyGradientAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.cfg = ReinforceConfig(
-            **{k: v for k, v in kwargs.items() if k in ReinforceConfig.__annotations__}
-        )
 
-    def _acting(self, state, deterministic):
+    def _act(self, state, deterministic: bool = False):
         features = self.encoder(state)
         dist = self.policy.get_distribution(features)
 
@@ -23,12 +15,12 @@ class ReinforceAgent(BaseAgent):
         raw_log_prob = dist.log_prob(raw_action)
         corrected_log_prob = self.policy.handler.apply_correction(
             raw_log_prob,
-            raw_action
+            raw_action,
         )
 
         info = {
             "action": raw_action.detach(),
-            "log_prob": corrected_log_prob.detach()
+            "log_prob": corrected_log_prob.detach(),
         }
         return raw_action, info
 
@@ -44,22 +36,22 @@ class ReinforceAgent(BaseAgent):
         returns = torch.zeros_like(rewards)
         g = 0.0
         for t in reversed(range(len(rewards))):
-            g = rewards[t] + self.cfg.gamma * g
+            g = rewards[t] + self.gamma * g
             returns[t] = g
 
-        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+        returns = (
+            returns - returns.mean()
+        ) / (returns.std(unbiased=False) + 1e-8)
 
-        # Forward pass
         features = self.encoder(data["states"])
         dist = self.policy.get_distribution(features)
 
         raw_log_probs = self.policy.handler.get_log_prob(dist, data["actions"])
         curr_log_probs = self.policy.handler.apply_correction(
             raw_log_probs,
-            data["actions"]
+            data["actions"],
         )
 
-        # REINFORCE loss: -1/T * sum(log_prob * Gt)
         loss = -(curr_log_probs * returns).mean()
 
         self.optimizer.zero_grad()

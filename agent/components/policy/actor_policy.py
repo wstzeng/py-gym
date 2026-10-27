@@ -1,6 +1,7 @@
-from .base_policy import BasePolicy
+from .base_policy import StochasticPolicy
 
-class ActorPolicy(BasePolicy):
+
+class ActorPolicy(StochasticPolicy):
     def __init__(self, actor, **kwargs):
         super().__init__(**kwargs)
         self.actor = actor
@@ -10,8 +11,7 @@ class ActorPolicy(BasePolicy):
         return super().sub_components() + ["actor"]
 
     def forward(self, x):
-        return self.actor(x)
+        return self.get_distribution(x)
 
-    def get_distribution(self, x):
-        params = self.actor(x)
-        return self.handler(params)
+    def get_distribution(self, features):
+        return self.handler(self.actor(features))
