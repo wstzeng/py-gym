@@ -20,8 +20,51 @@ This roadmap follows parallel development **tracks** to evolve the Py-Gym Framew
 
 ## Experiment Track (Tooling & Artifacts)
 - [x] **Monitoring**: Real-time CLI and Live monitors.
-- [ ] **Unified Artifacts**: Integrated saving of configs, logs, and ckpt. (In Progress)
+- [x] **Unified Artifacts**: Integrated saving of configs, logs, and ckpt.
 - [ ] **Adaptive Visualizer**: (New) Multi-mode rendering (ASCII-CLI, Matplotlib-GUI, No-Plot).
 - [ ] **Reporting**: Auto-generation of high-res training reports (PDF/PNG) with Z-order trend analysis.
 - [ ] **Lab Manager**: A dedicated tool/CLI for experiment archiving and batch comparison.
 - [ ] **Web Dashboard**: A lightweight web interface (Streamlit or Gradio based) to browse `experiments/` folders and compare curves dynamically.
+
+## Methodology Track (Trustworthy Comparisons)
+
+Gaps found while running the LunarLander PPO / TransformerCritic / REINFORCE
+comparison. The core abstractions held up; what is missing is the layer that
+makes an experiment result *believable*.
+
+- [ ] **Seeding**: Global seed control (env, action sampling, weight init, optimizer)
+  so runs are reproducible and A/B comparisons are meaningful. Without it, a
+  single-seed difference of a few tens of reward cannot be distinguished from noise.
+- [ ] **Best Checkpoint**: Save `model.ckpt` whenever the trailing-100 mean reward
+  improves, not only after the final iteration. A run that peaks at iteration 720
+  and decays currently keeps only the decayed weights.
+- [ ] **Run Isolation**: Disambiguate `experiments/{env.id}_{timestamp}/` (append the
+  pid or a short hash). Two runs of the same env started within the same second
+  currently share a directory, and `exist_ok=True` silently overwrites.
+- [ ] **Resume**: `--resume <run_dir>` to continue from a saved checkpoint and
+  optimizer state. Optimizer state is already persisted but cannot be consumed.
+- [ ] **Step Budget**: Optional fixed environment-step budget per iteration instead of
+  a fixed episode count, so per-iteration cost and wall time stay comparable across
+  configs. Episode length growth is why a run is ~4x slower at iteration 350 than at 50.
+- [ ] **Raw Metrics**: Record unweighted values (entropy, critic loss) next to the
+  tracker-weighted ones. `training_log.csv` currently stores `entropy * -entropy_weight`,
+  so the raw number is unrecoverable without knowing the weight.
+- [ ] **In-Training Evaluation**: Periodic deterministic evaluation written to a second
+  CSV. The reported `AverageReward` is sampled and therefore not comparable to a
+  test-time deterministic score.
+
+### Suggested order
+
+| Priority | Item | Effort |
+| ---: | :--- | :--- |
+| 1 | Seeding | 0.5 day |
+| 2 | Best Checkpoint | 0.5 day |
+| 3 | Run Isolation | 1 hour |
+| 4 | Resume | 1 day |
+| 5 | Step Budget | 2 days |
+| 6 | Raw Metrics | 1 hour |
+| 7 | In-Training Evaluation | 1 day |
+
+Items 1–3 plus 6 fit in a single day and are the foundation for every future
+"is this config actually better?" question.
+
