@@ -53,10 +53,11 @@ breaks it fails `pytest`.
 2. **`05_attn_small` uses depth 1**, not 2, to stay inside the small parameter
    budget. Attention at 2.4k parameters cannot afford two layers. Capacity parity
    was preferred over depth parity here; the large tier does hold depth constant.
-3. **No seed control yet.** Measured seed noise on this env is large: the same
-   `ppo.toml` run twice reached the solved threshold at iteration 530 and 642.
-   Single-seed results from this matrix are **not interpretable**. Fix
-   `Roadmap.md` -> Seeding first, then run >=3 seeds per arm.
+3. **One seed is not a result.** Measured seed noise on this env is large: the
+   same `ppo.toml` run twice reached the solved threshold at iteration 530 and
+   642. Seeding now exists (`--seed N`, see `utils/seed.py`), so run **>=3 seeds
+   per arm** and report `mean +/- sd`. A single-seed arm difference below ~100
+   iterations is inside the noise.
 4. Training reward is sampled, not deterministic. Comparing arms on it is fair
    but it is not a test-time score.
 
@@ -64,8 +65,11 @@ breaks it fails `pytest`.
 
 ```bash
 python manage.py train config/ablation/lunarlander/04_conv_large.toml \
-  --dry -T 600 -N 20 --record cli
+  --dry -T 600 -N 20 --record cli --seed 0
 ```
+
+Always pass `--seed`. Runs sharing a seed see the same per-episode initial
+states, so arms differ only in the critic.
 
 600 iterations is deliberate: the baseline reaches the solved threshold at
 ~640 and the transformer critic at ~290, so 600 keeps the comparison bounded
