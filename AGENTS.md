@@ -31,6 +31,16 @@ commands from the repository root. There is no build step or installed package l
   (the default is `cli live`).
 - Smoke test: `python manage.py train <config> --dry -T 1 -N 1`.
   `--debug` implies `--dry` and enables verbose logging.
+- Sweeps: `poetry run python scripts/sweep.py --configs '<glob>' --seeds 0 1 2
+  --jobs 4 --threads 4`
+  - Runs each (config, seed) into `experiments/sweeps/<name>/<stem>/seed<N>/`
+    through `--save-dir`, so parallel launches never collide on the timestamped
+    default path.
+  - Resumable: runs whose `run.json` reports `returncode: 0` are skipped;
+    `--force` redoes them, `--plan-only` prints the matrix.
+  - Ends with a `summary.csv` holding last-50/last-100, solved iteration, best
+    and wall time per run.
+  - `--save-dir DIR` also works on its own with plain `manage.py train`.
 - Tests: `pytest` (tests live in `tests/` and are tracked).
   - `tests/test_templates_smoke.py` is marked `integration`: it builds every
     template and steps its env. Box2D cases skip when `Box2D` is missing.
