@@ -1,0 +1,68 @@
+# Ablation arm: 03_conv_small
+# small tier: local mixing, matches the small MLP in capacity
+[env]
+id = "LunarLander-v3"
+
+[env.default]
+continuous = true
+
+[env.training]
+
+[env.testing]
+render_mode = "human"
+
+[agent]
+type = "PPOAgent"
+
+[agent.encoder]
+type = "VectorEncoder"
+layers = [
+    { type = "Linear", out_features = 64 },
+    { type = "LeakyReLU" },
+    { type = "Linear", out_features = 64 },
+    { type = "LeakyReLU" },
+]
+
+[agent.policy]
+type = "ActorCriticPolicy"
+
+[agent.policy.handler]
+type = "NormalHandler"
+
+[agent.policy.handler.params]
+action_dim = 2
+action_low = -1.0
+action_high = 1.0
+
+[agent.policy.actor]
+type = "Sequential"
+layers = [
+    { type = "Linear", out_features = 2 },
+]
+
+# 03_conv_small: Conv1d over 8 tokens, residual + LayerNorm, 2,269 parameters
+[agent.policy.critic]
+type = "ConvCritic"
+params = { d_model = 18, depth = 2, n_tokens = 8, kernel_size = 3 }
+
+[agent.buffer]
+type = "TrajectoryBuffer"
+
+# Identical across every arm. Do not tune per arm: the critic is the variable.
+[hyper_params]
+eps_clip = 0.2
+k_epochs = 10
+critic_weight = 0.5
+entropy_weight = 0.001
+gamma = 0.999
+gae_lambda = 0.98
+
+[hyper_params.optimizer]
+type = "AdamW"
+
+[hyper_params.optimizer.params]
+weight_decay = 0.0001
+lrs = { default = 0.0003 }
+
+[hyper_params.criterion]
+critic_loss = "SmoothL1Loss"
