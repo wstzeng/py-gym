@@ -30,7 +30,11 @@ def run_train(args):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     seed = resolve_seed(args.seed)
 
-    if args.dry:
+    if args.save_dir:
+        save_dir = args.save_dir
+        os.makedirs(save_dir, exist_ok=True)
+        logger.info(f"Artifacts will be stored in: {save_dir}")
+    elif args.dry:
         save_dir = tempfile.mkdtemp(prefix="pygym_")
         logger.warning(f"[Dry-run] Artifacts will be stored in: {save_dir}")
     else:
@@ -162,6 +166,12 @@ if __name__ == '__main__':
     train_p.add_argument('-N', '--episodes', type=int, default=10)
     train_p.add_argument('--record', nargs='+', default=['cli', 'live'])
     train_p.add_argument('--eval', type=int, default=0, help='Number of eval episodes after training')
+    train_p.add_argument(
+        '--save-dir',
+        type=str,
+        default=None,
+        help='Explicit artifact directory, overriding --dry and the timestamped default.',
+    )
 
     # Test Command
     test_p = subparsers.add_parser('test', parents=[base_p])
