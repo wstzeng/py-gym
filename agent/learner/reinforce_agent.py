@@ -24,6 +24,22 @@ class ReinforceAgent(PolicyGradientAgent):
         }
         return raw_action, info
 
+    @staticmethod
+    def compute_returns(
+            rewards: torch.Tensor,
+            dones: torch.Tensor,
+            gamma: float
+    ) -> torch.Tensor:
+        """Discounted returns, reset at every episode boundary."""
+        returns = torch.zeros_like(rewards)
+        running = 0.0
+        for t in reversed(range(len(rewards))):
+            if dones[t]:
+                running = 0.0
+            running = rewards[t] + gamma * running
+            returns[t] = running
+        return returns
+
     def update(self):
         data = self.buffer.get_data(self.device)
         if not data:
@@ -32,13 +48,9 @@ class ReinforceAgent(PolicyGradientAgent):
         self._tracker.reset()
 
         rewards = data["rewards"]
+        dones = data["dones"]
 
-        returns = torch.zeros_like(rewards)
-        g = 0.0
-        for t in reversed(range(len(rewards))):
-            g = rewards[t] + self.gamma * g
-            returns[t] = g
-
+        returns = self.compute_returns(rewards, dones, self.gamma)
         returns = (
             returns - returns.mean()
         ) / (returns.std(unbiased=False) + 1e-8)
