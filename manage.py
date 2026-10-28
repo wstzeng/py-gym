@@ -8,6 +8,7 @@ from utils.builder import build_agent
 from utils.train import train_loop
 from utils.test import test_loop
 from utils.logger import logger, setup_logger, Dashboard
+from utils.seed import resolve_seed, set_global_seed
 
 def get_base_parser():
     """Shared arguments for both train and test modes."""
@@ -15,12 +16,19 @@ def get_base_parser():
     parser.add_argument('--device', type=str, default='cpu')
     parser.add_argument('--dry', action='store_true', help='Save to system temp directory')
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=None,
+        help='Random seed. Omitted: a fresh seed is drawn and recorded in config.',
+    )
     return parser
 
 def run_train(args):
     # 1. Load config and setup path
     config = AgentConfig.load(args.config)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    seed = resolve_seed(args.seed)
 
     if args.dry:
         save_dir = tempfile.mkdtemp(prefix="pygym_")
@@ -35,10 +43,14 @@ def run_train(args):
         "episodes": args.episodes,
         "device": args.device,
         "timestamp": timestamp,
-        "dry_run": args.dry
+        "dry_run": args.dry,
+        "seed": seed
     })
 
     # 3. Build Components
+    # Seed before building: weight initialisation consumes torch's global RNG.
+    set_global_seed(seed)
+    logger.info(f"Seed: {seed}")
     agent = build_agent(config_dict=config.to_dict(), device=args.device)
     dashboard = Dashboard(
         env_name=config.env.id,
@@ -58,6 +70,7 @@ def run_train(args):
             episodes=args.episodes,
             dashboard=dashboard,
             env_kwargs=train_env_kwargs,
+            seed=seed,
         )
     except KeyboardInterrupt:
         dashboard.close()
@@ -83,6 +96,7 @@ def run_train(args):
             agent=agent,
             episodes=args.eval,
             env_kwargs=test_env_kwargs,
+            seed=seed + 1,
         )
 
 def run_test(args):
@@ -99,6 +113,14 @@ def run_test(args):
         raise FileNotFoundError(f"Config not found in {args.exp_dir}")
 
     config = AgentConfig.load(config_path)
+    # Older checkpoints predate seed tracking: fall back to a fixed seed so
+    # evaluation stays reproducible instead of drifting per run.
+    seed = resolve_seed(args.seed) if args.seed is not None else int(
+        config.metadata.get("seed", 0)
+    )
+    set_global_seed(seed)
+    logger.info(f"Seed: {seed}")
+
     agent = build_agent(config_dict=config.to_dict(), device=args.device)
     agent.load_checkpoints(ckpt_path)
 
@@ -119,6 +141,7 @@ def run_test(args):
             episodes=args.episodes,
             dashboard=dashboard,
             env_kwargs=test_env_kwargs,
+            seed=seed,
         )
     finally:
         dashboard.close()

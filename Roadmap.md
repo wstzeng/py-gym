@@ -32,9 +32,9 @@ Gaps found while running the LunarLander PPO / TransformerCritic / REINFORCE
 comparison. The core abstractions held up; what is missing is the layer that
 makes an experiment result *believable*.
 
-- [ ] **Seeding**: Global seed control (env, action sampling, weight init, optimizer)
-  so runs are reproducible and A/B comparisons are meaningful. Without it, a
-  single-seed difference of a few tens of reward cannot be distinguished from noise.
+- [x] **Seeding**: Global seed control (env, action sampling, weight init, optimizer)
+  so runs are reproducible and A/B comparisons are meaningful. Implemented as
+  `--seed` plus `utils/seed.py`; the resolved seed is recorded in run metadata.
 - [ ] **Best Checkpoint**: Save `model.ckpt` whenever the trailing-100 mean reward
   improves, not only after the final iteration. A run that peaks at iteration 720
   and decays currently keeps only the decayed weights.
@@ -57,14 +57,13 @@ makes an experiment result *believable*.
 
 | Priority | Item | Effort |
 | ---: | :--- | :--- |
-| 1 | Seeding | 0.5 day |
-| 2 | Best Checkpoint | 0.5 day |
-| 3 | Run Isolation | 1 hour |
+| 1 | Best Checkpoint | 0.5 day |
+| 2 | Run Isolation | 1 hour |
+| 3 | Raw Metrics | 1 hour |
 | 4 | Resume | 1 day |
 | 5 | Step Budget | 2 days |
-| 6 | Raw Metrics | 1 hour |
-| 7 | In-Training Evaluation | 1 day |
+| 6 | In-Training Evaluation | 1 day |
 
-Items 1–3 plus 6 fit in a single day and are the foundation for every future
+Items 1–3 fit in a single day and are the foundation for every future
 "is this config actually better?" question.
 
