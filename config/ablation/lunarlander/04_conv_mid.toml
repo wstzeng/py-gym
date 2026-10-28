@@ -1,5 +1,5 @@
-# Ablation arm: 06_attn_large
-# large tier: global mixing, the architecture this ablation is testing
+# Ablation arm: 04_conv_mid
+# mid tier: local mixing, matches attn_mid in capacity but not in FLOPs
 [env]
 id = "LunarLander-v3"
 
@@ -40,10 +40,10 @@ layers = [
     { type = "Linear", out_features = 2 },
 ]
 
-# 06_attn_large: 2 transformer layers over 8 tokens, 67,585 parameters
+# 04_conv_mid: Conv1d over 8 tokens, residual + LayerNorm, 17,161 parameters
 [agent.policy.critic]
-type = "TransformerCritic"
-params = { d_model = 64, nhead = 4, depth = 2, n_tokens = 8, dim_feedforward = 128 }
+type = "ConvCritic"
+params = { d_model = 52, depth = 2, n_tokens = 8, kernel_size = 3 }
 
 [agent.buffer]
 type = "TrajectoryBuffer"

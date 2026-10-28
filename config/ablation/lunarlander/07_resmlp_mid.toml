@@ -1,5 +1,5 @@
-# Ablation arm: 04_conv_large
-# large tier: local mixing, matches attn_large in capacity but not in FLOPs
+# Ablation arm: 07_resmlp_mid
+# mid tier control: LayerNorm + residual without attention
 [env]
 id = "LunarLander-v3"
 
@@ -40,10 +40,10 @@ layers = [
     { type = "Linear", out_features = 2 },
 ]
 
-# 04_conv_large: Conv1d over 8 tokens, residual + LayerNorm, 66,769 parameters
+# 07_resmlp_mid: 2 residual FF blocks, dense mixing, 17,089 parameters
 [agent.policy.critic]
-type = "ConvCritic"
-params = { d_model = 104, depth = 2, n_tokens = 8, kernel_size = 3 }
+type = "ResidualMLPCritic"
+params = { hidden = 64, depth = 2 }
 
 [agent.buffer]
 type = "TrajectoryBuffer"

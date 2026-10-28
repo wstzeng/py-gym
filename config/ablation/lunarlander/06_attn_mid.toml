@@ -1,5 +1,5 @@
-# Ablation arm: 07_resmlp
-# control arm: LayerNorm + residual without attention
+# Ablation arm: 06_attn_mid
+# mid tier: global mixing, the architecture this ablation is testing
 [env]
 id = "LunarLander-v3"
 
@@ -40,10 +40,10 @@ layers = [
     { type = "Linear", out_features = 2 },
 ]
 
-# 07_resmlp: 2 residual FF blocks, dense mixing, 66,625 parameters
+# 06_attn_mid: 2 transformer layers over 8 tokens, 17,409 parameters
 [agent.policy.critic]
-type = "ResidualMLPCritic"
-params = { hidden = 256, depth = 2 }
+type = "TransformerCritic"
+params = { d_model = 32, nhead = 4, depth = 2, n_tokens = 8, dim_feedforward = 64 }
 
 [agent.buffer]
 type = "TrajectoryBuffer"

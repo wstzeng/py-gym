@@ -1,5 +1,5 @@
-# Ablation arm: 02_mlp_large
-# capacity control: same MLP, 32x wider, exact parameter parity with attn_large
+# Ablation arm: 08_mlp_anchor
+# anchor: the original TransformerCritic capacity as a pure MLP (no LN)
 [env]
 id = "LunarLander-v3"
 
@@ -40,7 +40,7 @@ layers = [
     { type = "Linear", out_features = 2 },
 ]
 
-# 02_mlp_large: dense mixing, no normalisation, 67,585 parameters
+# 08_mlp_anchor: dense mixing, no normalisation, 67,585 parameters
 [agent.policy.critic]
 type = "Sequential"
 layers = [
