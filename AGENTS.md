@@ -21,6 +21,10 @@ commands from the repository root. There is no build step or installed package l
   - TOML and JSON are both supported; the file extension selects the loader.
   - `-T/--iterations` (default 500), `-N/--episodes` (episodes per iteration),
     `--eval N`, `--device cpu|cuda`.
+  - `--seed N` makes a run reproducible. Omitting it draws a fresh seed, so
+    every run stays unlinked; the seed actually used is always written to
+    `config.json` / `config.toml` metadata. Bit-identical reruns also need the
+    same `OMP_NUM_THREADS`, because torch CPU kernels may reorder reductions.
 - Test a run: `python manage.py test experiments/<run_dir> -N 5`
   - Requires `config.toml` (or `config.json`) and `model.ckpt` in that directory.
 - Headless: `--record cli` avoids opening the live matplotlib window
@@ -61,6 +65,11 @@ commands from the repository root. There is no build step or installed package l
   `to_env_format()`; policy log-prob corrections include the scaling Jacobian.
 - `ReinforceAgent.compute_returns()` resets the running return at every
   `dones` boundary, so a buffer holding several episodes is still correct.
+- Seeding lives in `utils/seed.py`. `set_global_seed()` runs in `manage.py`
+  *before* `build_agent()`, because weight initialisation consumes torch's
+  global RNG. `episode_seed(seed, index)` derives env seeds as a pure function
+  of the run seed and episode index, so runs sharing a seed see the same initial
+  states no matter how many episodes they reset.
 
 ## Config and artifacts
 - `env.default` is merged into both training and testing; `env.training` and
