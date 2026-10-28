@@ -185,6 +185,14 @@ def build_component(
         return instance, getattr(instance, 'feature_dim', out_dim)
 
     # Basic components such as buffers and action handlers.
+    if getattr(cls, 'requires_input_dim', False):
+        if input_dim is None:
+            raise ValueError(
+                f"{cls_type} requires an input dimension, but none was "
+                "provided by its parent component."
+            )
+        params.setdefault('input_dim', input_dim)
+
     instance = cls(**params)
     return instance, getattr(instance, 'feature_dim', None)
 

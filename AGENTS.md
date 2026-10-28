@@ -47,7 +47,9 @@ commands from the repository root. There is no build step or installed package l
     module must also be imported in `utils/builder.py`.
   - `build_component()` returns `(component, output_dim)`. It builds
     `sub_components()` recursively and threads the input dimension down, so
-    actor/critic layers usually do not need an explicit `input_dim`.
+    actor/critic layers usually do not need an explicit `input_dim`. Components
+    that declare `requires_input_dim = True` (e.g. `TransformerCritic`) receive
+    the inherited dimension automatically.
   - `build_agent()` uses `agent_cls.sub_components()` as the component whitelist,
     rejects unknown `[agent.*]` keys, passes `hyper_params` as a dict, and
     resolves `hyper_params.criterion` into loss objects.
@@ -57,12 +59,15 @@ commands from the repository root. There is no build step or installed package l
   must not define `state_dim`; it is inferred from `env.observation_space`.
 - Action handling: `NormalHandler` / `BetaHandler` apply action bounds in
   `to_env_format()`; policy log-prob corrections include the scaling Jacobian.
+- `ReinforceAgent.compute_returns()` resets the running return at every
+  `dones` boundary, so a buffer holding several episodes is still correct.
 
 ## Config and artifacts
 - `env.default` is merged into both training and testing; `env.training` and
   `env.testing` override per mode.
-- Example configs live in `config/templates/`; add new recipes there.
-  `config/draft/` is gitignored.
+- Config directories carry intent: `config/templates/` holds minimal runnable
+  examples, `config/stable/` holds tuned, reproducible recipes, and
+  `config/draft/` is gitignored scratch space for unproven ideas.
 - A completed run writes `experiments/{env.id}_{timestamp}/` with `config.toml`,
   `config.json`, `model.ckpt` (including optimizer state), and
   `training_log.csv/png`. Ctrl-C intentionally skips config and checkpoint saving.
