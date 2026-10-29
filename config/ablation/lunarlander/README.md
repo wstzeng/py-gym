@@ -104,10 +104,13 @@ attention and convolution are many small ops rather than a few large matmuls.
 ## Results
 
 Results are not kept here — `config/` holds configs, not findings. See
-`experiments/sweeps/critic_ablation_s0-2/RESULTS.md` for the 8-arm x 3-seed run,
-the `mean +/- sd` table, the four contrasts it supports, and the one confound it
-leaves open. `comparison.png` in the same directory redraws from the raw
-`training_log.csv` files:
+`experiments/sweeps/critic_ablation_s0-2/`:
+
+- `REPORT.md` — the measured table, generated from `summary.csv` (never typed by
+  hand), including the run's provenance.
+- `RESULTS.md` — the four contrasts the matrix supports and the one confound it
+  leaves open.
+- `comparison.png` — mean +/- sd curves, redrawn from the raw `training_log.csv`:
 
 ```bash
 poetry run python scripts/plot_sweep.py --sweep experiments/sweeps/critic_ablation_s0-2
