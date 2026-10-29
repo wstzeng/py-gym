@@ -2,16 +2,11 @@
 
 ## `ppo.toml`
 
-Reference result (2026-10-28, CPU, `OMP_NUM_THREADS=4`, 4 cores):
-
-| Setting | Value |
-| :--- | :--- |
-| iterations × episodes | 800 × 20 |
-| wall time | ~34 min |
-| last-100 mean reward | **262.7** (std 14.1) |
-| last-50 mean reward | 264.4 |
-| best iteration | 284.0 @ 720 |
-| solved (trailing-100 ≥ 200) | iteration 530 |
+Tuned on CPU (`OMP_NUM_THREADS=4`, 4 cores), 800 iterations x 20 episodes.
+Numbers live with the runs, not with the config: see
+`experiments/lunarlander_compare/RESULTS.md` for the measured last-100 mean,
+solve iteration and wall time, and `experiments/sweeps/critic_ablation_s0-2/`
+for how this recipe's critic compares to the alternatives.
 
 Key changes versus the earlier 500 × 10 run (last-100 mean 24.6):
 

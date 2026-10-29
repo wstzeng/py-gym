@@ -1,0 +1,75 @@
+{
+    "env": {
+        "id": "LunarLander-v3",
+        "default": {
+            "continuous": true
+        },
+        "training": {},
+        "testing": {
+            "render_mode": "human"
+        }
+    },
+    "agent": {
+        "type": "ReinforceAgent",
+        "encoder": {
+            "type": "VectorEncoder",
+            "layers": [
+                {
+                    "type": "Linear",
+                    "out_features": 64
+                },
+                {
+                    "type": "LeakyReLU"
+                },
+                {
+                    "type": "Linear",
+                    "out_features": 64
+                },
+                {
+                    "type": "LeakyReLU"
+                }
+            ]
+        },
+        "policy": {
+            "type": "ActorPolicy",
+            "handler": {
+                "type": "NormalHandler",
+                "params": {
+                    "action_dim": 2,
+                    "action_low": -1.0,
+                    "action_high": 1.0
+                }
+            },
+            "actor": {
+                "type": "Sequential",
+                "layers": [
+                    {
+                        "type": "Linear",
+                        "out_features": 2
+                    }
+                ]
+            }
+        },
+        "buffer": {
+            "type": "TrajectoryBuffer"
+        }
+    },
+    "hyper_params": {
+        "gamma": 0.999,
+        "optimizer": {
+            "type": "Adam",
+            "params": {
+                "lrs": {
+                    "default": 0.0003
+                }
+            }
+        }
+    },
+    "metadata": {
+        "iterations": 800,
+        "episodes": 20,
+        "device": "cpu",
+        "timestamp": "20261028_182450",
+        "dry_run": true
+    }
+}
