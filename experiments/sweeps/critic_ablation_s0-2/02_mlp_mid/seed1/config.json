@@ -1,0 +1,101 @@
+{
+    "env": {
+        "id": "LunarLander-v3",
+        "default": {
+            "continuous": true
+        },
+        "training": {},
+        "testing": {
+            "render_mode": "human"
+        }
+    },
+    "agent": {
+        "type": "PPOAgent",
+        "encoder": {
+            "type": "VectorEncoder",
+            "layers": [
+                {
+                    "type": "Linear",
+                    "out_features": 64
+                },
+                {
+                    "type": "LeakyReLU"
+                },
+                {
+                    "type": "Linear",
+                    "out_features": 64
+                },
+                {
+                    "type": "LeakyReLU"
+                }
+            ]
+        },
+        "policy": {
+            "type": "ActorCriticPolicy",
+            "handler": {
+                "type": "NormalHandler",
+                "params": {
+                    "action_dim": 2,
+                    "action_low": -1.0,
+                    "action_high": 1.0
+                }
+            },
+            "actor": {
+                "type": "Sequential",
+                "layers": [
+                    {
+                        "type": "Linear",
+                        "out_features": 2
+                    }
+                ]
+            },
+            "critic": {
+                "type": "Sequential",
+                "layers": [
+                    {
+                        "type": "Linear",
+                        "out_features": 256
+                    },
+                    {
+                        "type": "LeakyReLU"
+                    },
+                    {
+                        "type": "Linear",
+                        "out_features": 1
+                    }
+                ]
+            }
+        },
+        "buffer": {
+            "type": "TrajectoryBuffer"
+        }
+    },
+    "hyper_params": {
+        "eps_clip": 0.2,
+        "k_epochs": 10,
+        "critic_weight": 0.5,
+        "entropy_weight": 0.001,
+        "gamma": 0.999,
+        "gae_lambda": 0.98,
+        "optimizer": {
+            "type": "AdamW",
+            "params": {
+                "weight_decay": 0.0001,
+                "lrs": {
+                    "default": 0.0003
+                }
+            }
+        },
+        "criterion": {
+            "critic_loss": "SmoothL1Loss"
+        }
+    },
+    "metadata": {
+        "iterations": 600,
+        "episodes": 20,
+        "device": "cpu",
+        "timestamp": "20261029_004406",
+        "dry_run": false,
+        "seed": 1
+    }
+}

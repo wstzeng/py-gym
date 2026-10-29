@@ -103,62 +103,12 @@ attention and convolution are many small ops rather than a few large matmuls.
 
 ## Results
 
-Run `critic_ablation_s0-2`: 8 arms x 3 seeds x 600 iterations, `--jobs 4
---threads 4`, 4 threads pinned per run. 11.9 hours wall. Raw artifacts in
-`experiments/sweeps/critic_ablation_s0-2/` (untracked), curves in
-`comparison.png` next to this file's run directory.
+Results are not kept here — `config/` holds configs, not findings. See
+`experiments/sweeps/critic_ablation_s0-2/RESULTS.md` for the 8-arm x 3-seed run,
+the `mean +/- sd` table, the four contrasts it supports, and the one confound it
+leaves open. `comparison.png` in the same directory redraws from the raw
+`training_log.csv` files:
 
-| Arm | Params | MACs | last-100 | solved at | solved | wall |
-| :--- | ---: | ---: | :--- | :--- | ---: | ---: |
-| `01_mlp_small` | 2,113 | 2,080 | 212 +/- 36 | 540 +/- 23 | 2/3 | 44 min |
-| `03_conv_small` | 2,269 | 16,722 | 238 +/- 16 | 303 +/- 35 | 3/3 | 126 min |
-| `05_attn_small` | 2,385 | 19,472 | 233 +/- 17 | 341 +/- 63 | 3/3 | 174 min |
-| `02_mlp_mid` | 16,897 | 16,640 | 120 +/- 107 | never | 0/3 | 45 min |
-| `07_resmlp_mid` | 17,089 | 16,448 | 215 +/- 39 | 499 +/- 41 | 2/3 | 117 min |
-| `04_conv_mid` | 17,161 | 133,172 | 260 +/- 4 | 284 +/- 5 | 3/3 | 150 min |
-| `06_attn_mid` | 17,409 | 141,344 | 240 +/- 6 | 269 +/- 17 | 3/3 | 231 min |
-| `08_mlp_anchor` | 67,585 | 66,560 | 81 +/- 67 | never | 0/3 | 45 min |
-
-`never` = did not reach a trailing-100 mean of 200 within 600 iterations. Wall
-is mean per run at `OMP_NUM_THREADS=4`.
-
-## What the matrix says
-
-Four contrasts, ordered by how clean they are:
-
-1. **`02_mlp_mid` vs `07_resmlp_mid` — normalisation + residuals win.**
-   Same parameters (16,897 vs 17,089) *and* same MACs (16,640 vs 16,448); the
-   only difference is LayerNorm + residual + GELU. That moves the arm from
-   0/3 solved, last-100 120 +/- 107, to 2/3 solved, 215 +/- 39. Nothing else in
-   the matrix is this well controlled.
-2. **`06_attn_mid` vs `04_conv_mid` — attention adds nothing.**
-   Matched parameters and matched MACs (141k vs 133k), and the two are
-   indistinguishable: 269 +/- 17 vs 284 +/- 5 iterations to solve, 240 +/- 6 vs
-   260 +/- 4 last-100. Whatever the transformer critic was doing, local
-   convolution does it too. Conv also costs 1.5x less wall time per run
-   (150 vs 231 min) for the same nominal FLOPs, because attention is a pile of
-   small ops that do not saturate a core.
-3. **Capacity is not the explanation, and on its own it hurts.**
-   Pure MLPs get *worse* as they grow: `01_mlp_small` (2.1k) 212 +/- 36 and 2/3
-   solved, `02_mlp_mid` (16.9k) 120 +/- 107 and 0/3, `08_mlp_anchor` (67.6k)
-   81 +/- 67 and 0/3. The arm that carries the original `TransformerCritic`'s
-   parameter count is the worst arm in the matrix.
-4. **`07_resmlp_mid` vs `06_attn_mid` — still confounded.**
-   Parameters match (17,089 vs 17,409) but compute does not: 16,448 vs 141,344
-   MACs, 8.6x. The transformer is faster to solve, but this contrast cannot say
-   whether that is attention, per-token mixing, or simply 8x the arithmetic.
-   A compute-matched dense control is the one missing cell; see below.
-
-The original 3-way result (transformer critic solved at ~284, plain MLP at
-~640) therefore does **not** demonstrate that self-attention is the reason. It
-demonstrates that the shipped 2.1k un-normalised MLP critic was under-powered and
-under-computed, and that anything with a normalised residual stream over tokens
-closes the gap.
-
-### Missing cell
-
-To separate "per-token mixing" from "8x the FLOPs", the dense arm needs to be
-compute-matched rather than parameter-matched: `ResidualMLPCritic(hidden=520)`
-lands at ~133k parameters and ~133k MACs, i.e. the same FLOPs as `attn_mid` and
-`conv_mid`, but 8x the parameters of the other mid arms. That arm is not part of
-the tracked matrix because it breaks parameter parity by construction.
+```bash
+poetry run python scripts/plot_sweep.py --sweep experiments/sweeps/critic_ablation_s0-2
+```
