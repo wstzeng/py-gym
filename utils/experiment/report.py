@@ -1,9 +1,10 @@
-"""Sweep reports: ``summary.csv``, ``REPORT.md`` and ``comparison.png``.
+"""Experiment reports and plots: derived files only.
 
 Everything is rendered from files a run already wrote — its ``config.toml``
 snapshot and its ``training_log.csv`` — so redrawing never needs a retrain::
 
     python manage.py report --sweep critic_ablation_s0-2
+    python manage.py report --run experiments/sweeps/<name>/<arm>/seed0
 
 A run counts as complete when its config snapshot is present; directories
 without one are listed as incomplete and left out of the plot. Panels default to
@@ -12,6 +13,9 @@ keeps a 3-parameter arm from being drowned out by a 70-parameter one::
 
     --panel 'small tier:01_mlp_small,03_conv_small,05_attn_small' \
     --panel 'mid tier:02_mlp_mid,04_conv_mid,06_attn_mid,07_resmlp_mid'
+
+Per-run plots live in the artifact cache and are rebuilt by the same command,
+which is what makes ``artifacts/`` disposable.
 """
 
 from __future__ import annotations
@@ -78,25 +82,33 @@ def summarize(run_dir):
     return result
 
 
-def load_metadata(run_dir):
-    """Config snapshot metadata: TOML first, legacy JSON as the fallback.
+def load_snapshot(record):
+    """The config snapshot: TOML, or a legacy JSON one.
 
     Returns ``None`` when the directory holds no snapshot, which is exactly how
     an interrupted run is recognised.
     """
-    run_dir = Path(run_dir)
-    toml_path = run_dir / "config.toml"
-    json_path = run_dir / "config.json"
+    record = Path(record)
+    toml_path = record / "config.toml"
+    json_path = record / "config.json"
 
     try:
         if toml_path.exists():
             with toml_path.open("rb") as handle:
-                return tomllib.load(handle).get("metadata", {})
+                return tomllib.load(handle)
         if json_path.exists():
-            return json.loads(json_path.read_text()).get("metadata", {})
+            return json.loads(json_path.read_text())
     except (OSError, ValueError):
         return {}
     return None
+
+
+def load_metadata(run_dir):
+    """Metadata of the snapshot, or ``None`` when there is no snapshot."""
+    snapshot = load_snapshot(run_dir)
+    if snapshot is None:
+        return None
+    return snapshot.get("metadata", {})
 
 
 def load_legacy_run(run_dir):
@@ -327,6 +339,130 @@ def write_report(root):
     return _write_derived(root, rows, incomplete)
 
 
+RUN_PLOT = "training_log.png"
+
+
+def load_run(record):
+    """``(iterations, rewards, metrics)`` from one run's CSV, or ``None``.
+
+    Metrics are whatever columns the run recorded, so the plot keeps showing
+    every series without this module hard-coding PPO's names.
+    """
+    path = Path(record) / "training_log.csv"
+    try:
+        with path.open() as handle:
+            rows = list(csv.DictReader(handle))
+    except OSError:
+        return None
+    if not rows:
+        return None
+
+    iterations = [int(row["Iteration"]) for row in rows]
+    rewards = [float(row[REWARD_COLUMN]) for row in rows]
+
+    metrics = {}
+    for name in rows[0]:
+        if name in ("Iteration", REWARD_COLUMN):
+            continue
+        try:
+            metrics[name] = [float(row[name]) for row in rows]
+        except (TypeError, ValueError):
+            continue  # a ragged column is not worth failing the plot for
+    return iterations, rewards, metrics
+
+
+def centered_sma(values, window):
+    """Centred moving average, the same smoothing the in-memory plotter used."""
+    values = np.asarray(values, dtype=float)
+    half = max(0, int(window) // 2)
+    return np.array([
+        values[max(0, i - half):min(len(values), i + half + 1)].mean()
+        for i in range(len(values))
+    ])
+
+
+def run_label(record):
+    """``env (agent)`` for the title, falling back to the directory name."""
+    snapshot = load_snapshot(record) or {}
+    env = snapshot.get("env", {}).get("id")
+    agent = snapshot.get("agent", {}).get("type")
+    if env and agent:
+        return f"{env} ({agent})"
+    return env or Path(record).name
+
+
+def plot_run(record, out=None):
+    """Redraw one run's training curve from its CSV.
+
+    The PNG is derived, so it belongs in the artifact cache next to the
+    checkpoint: deleting ``artifacts/`` loses a picture, never a number. The
+    default destination is the mirrored path, which keeps a dry run or an
+    external ``--save-dir`` self-contained. Returns the path, or ``None`` when
+    the run has no log.
+    """
+    data = load_run(record)
+    if data is None:
+        return None
+
+    iterations, rewards, metrics = data
+    path = Path(out) if out else paths.artifact_for(record) / RUN_PLOT
+
+    # Imported here so report stays light for callers that only read rows.
+    from utils.logger.plot_config import set_plot_style
+
+    set_plot_style()
+    fig, ax1 = plt.subplots(figsize=(12, 7))
+    try:
+        ax2 = ax1.twinx()
+
+        colors = ["tab:orange", "tab:red", "tab:green", "tab:brown"]
+        for i, (name, values) in enumerate(metrics.items()):
+            ax2.plot(
+                iterations, values, color=colors[i % 4], linestyle="--",
+                alpha=0.4, label=name.capitalize(),
+            )
+
+        trend = centered_sma(rewards, max(2, len(rewards) // 50))
+        ax1.plot(
+            iterations, rewards, color="tab:purple", alpha=0.15, zorder=2,
+            label="Raw Reward",
+        )
+        ax1.plot(
+            iterations, trend, color="tab:blue", linewidth=2.5, zorder=3,
+            label="Trend (SMA)",
+        )
+
+        ax1.set_zorder(ax2.get_zorder() + 1)
+        ax1.patch.set_visible(False)
+        ax1.set_xlabel("Iteration", fontweight="bold")
+        ax1.set_ylabel("Reward", color="tab:blue", fontweight="bold")
+        ax2.set_ylabel("Metrics", color="tab:gray", fontweight="bold")
+        ax1.set_title(f"Final Training Summary: {run_label(record)}", pad=20)
+
+        handles1, labels1 = ax1.get_legend_handles_labels()
+        handles2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(handles1 + handles2, labels1 + labels2, loc="upper left")
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, bbox_inches="tight", dpi=300)
+    finally:
+        plt.close(fig)
+        plt.rcdefaults()  # the run plot is xkcd-styled; do not leak it
+    return path
+
+
+def refresh_run_plots(root, incomplete=()):
+    """Redraw every completed run's PNG; returns how many were written."""
+    skipped = {Path(item).resolve() for item in incomplete}
+    written = 0
+    for run_dir in sorted(Path(root).glob("*/seed*")):
+        if run_dir.resolve() in skipped:
+            continue
+        if plot_run(run_dir) is not None:
+            written += 1
+    return written
+
+
 def load_curves(root, skip=()):
     """Map arm name -> list of per-seed reward sequences, sorted by seed."""
     skip = {Path(path) for path in skip}
@@ -457,6 +593,9 @@ def render(root, args):
     fig.savefig(out, dpi=130)
     print(f"wrote {out}")
 
+    if not args.no_run_plots:
+        print(f"run plots: {refresh_run_plots(root, incomplete)} refreshed")
+
     for arm, seeds, mean, sd in summary_table(curves):
         print(f"  {arm:20s} n={seeds} last-100 {mean:6.1f} +/- {sd:5.1f}")
     return 0
@@ -464,4 +603,10 @@ def render(root, args):
 
 def run(args):
     """Entry point for ``manage.py report``; returns an exit code."""
+    if args.run:
+        path = plot_run(args.run)
+        if path is None:
+            raise SystemExit(f"error: no training_log.csv under {args.run}")
+        print(f"wrote {path}")
+        return 0
     return render(resolve_sweep(args.sweep), args)

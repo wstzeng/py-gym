@@ -100,7 +100,6 @@ def run_train(args):
         agent_name=agent.__class__.__name__,
         total_iterations=args.iterations,
         save_dir=save_dir,
-        artifact_dir=artifact_dir,
         modes=args.record
     )
 
@@ -132,6 +131,16 @@ def run_train(args):
     config.metadata["wall_seconds"] = round(time.monotonic() - started, 1)
     config.save(os.path.join(save_dir, "config.toml"))
     logger.info(f"Results archived in: {save_dir} (artifacts: {artifact_dir})")
+
+    # The plot is derived from the CSV, so a plotting failure must never make a
+    # completed run look unfinished. report owns the drawing; train only asks.
+    from utils.experiment import report as report_tools
+    try:
+        plot = report_tools.plot_run(save_dir)
+        if plot:
+            logger.info(f"Training plot: {plot}")
+    except Exception as exc:  # noqa: BLE001 - a derived file cannot fail a run
+        logger.warning(f"Could not draw training_log.png: {exc}")
 
     # 5. Optional Evaluation
     if args.eval > 0:
@@ -237,14 +246,21 @@ if __name__ == '__main__':
     exp_p.add_argument('action', choices=['archive', 'list'])
 
     # Report Command
-    report_p = subparsers.add_parser('report', help='Regenerate a sweep report')
-    report_p.add_argument('--sweep', required=True, help='Sweep name or directory')
+    report_p = subparsers.add_parser('report', help='Rebuild plots and reports')
+    source = report_p.add_mutually_exclusive_group(required=True)
+    source.add_argument('--sweep', help='Sweep name or directory')
+    source.add_argument('--run', help='One record directory')
     report_p.add_argument('--out', default=None, help='Output PNG (default: <sweep>/comparison.png)')
     report_p.add_argument('--panel', action='append', default=None, help="'Title:arm1,arm2'")
     report_p.add_argument('--smooth', type=int, default=20)
     report_p.add_argument('--threshold', type=float, default=200.0)
     report_p.add_argument('--title', default=None)
-    report_p.add_argument('--no-plot', action='store_true', help='Only rewrite REPORT.md')
+    report_p.add_argument(
+        '--no-run-plots', action='store_true', help='Skip per-run training plots'
+    )
+    report_p.add_argument(
+        '--no-plot', action='store_true', help='Only rewrite summary.csv and REPORT.md'
+    )
 
     args = parser.parse_args()
 
