@@ -48,8 +48,10 @@ commands from the repository root. There is no build step or installed package l
   Parallelise by wrapping the body in `xargs -P 4`; give each worker the same
   thread count so the recorded provenance stays comparable.
 - Report a sweep: `python manage.py report --sweep experiments/sweeps/<name>`
-  writes `summary.csv`, `REPORT.md` and `comparison.png` from the logs alone
-  (`--panel 'Title:arm1,arm2'` splits tiers, `--smooth`, `--threshold`).
+  rebuilds `summary.csv`, `REPORT.md`, `comparison.png` and every run's
+  `training_log.png` from the logs alone (`--panel 'Title:arm1,arm2'` splits
+  tiers, `--smooth`, `--threshold`, `--no-run-plots`). One run:
+  `manage.py report --run <record>`.
 - Tests: `pytest` (tests live in `tests/` and are tracked).
   - `tests/test_templates_smoke.py` is marked `integration`: it builds every
     template and steps its env. Box2D cases skip when `Box2D` is missing.
@@ -131,7 +133,8 @@ commands from the repository root. There is no build step or installed package l
   interpretation. `artifacts/` is ignored and mirrors the same relative paths;
   it holds `model.ckpt`, `training_log.png` and `train.log`. `paths.artifact_for()`
   maps one to the other, and a `--save-dir` outside `experiments/` (a dry run)
-  keeps everything together.
+  keeps everything together. The plot is drawn by `report` from the CSV, so
+  deleting `artifacts/` costs pictures and checkpoints, never numbers.
 - Config directories carry intent: `config/templates/` holds minimal runnable
   examples, `config/stable/` holds tuned, reproducible recipes,
   `config/ablation/` holds deliberately designed comparison matrices, and
@@ -146,9 +149,20 @@ commands from the repository root. There is no build step or installed package l
 
 ## Branches and experiment records
 - Code lives on `feat/*`, configurations and their results on `exp/*`. A feature
-  branch merges into `main` with `--no-ff`; an `exp/*` branch takes `main` in the
-  same way. **Never rebase an `exp/*` branch**: its result commits are history,
-  and rewriting them to move the base buys nothing while forcing a force-push.
+  branch merges into `main` with `--no-ff`. **Never rebase an `exp/*` branch**:
+  its result commits are history, and rewriting them to move the base buys
+  nothing while forcing a force-push.
+- An `exp/*` branch only ever takes a **tagged** commit of `main`, never the
+  branch tip: start it at a release tag (`git switch -c exp/<name> v0.2.0`) and
+  later merge the next tag (`git merge --no-ff v0.2.0`, which an annotated tag
+  records as `Merge tag 'v0.2.0'`). Untagged code therefore reaches an
+  experiment only through a release, so the `git_sha` every run records is
+  always a published version — records stay reproducible and comparable across
+  branches. The cost is that refactors wait for a release, so tag whenever a
+  change lands that experiments should be able to pick up.
+- Releases are annotated `vMAJOR.MINOR.PATCH` tags on `main`, cut from a commit
+  whose `pyproject.toml` already carries that number — bump the version first,
+  verify, then tag, so the tag never names a tree that disagrees with it.
 - One checkout, no worktrees. `experiments/` is tracked on `exp/*`, so switching
   branch switches which records are on disk while `artifacts/` stays put.
   Because a run writes into a branch's tree, **do not switch branches while a
