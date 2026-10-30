@@ -38,9 +38,10 @@ makes an experiment result *believable*.
 - [ ] **Best Checkpoint**: Save `model.ckpt` whenever the trailing-100 mean reward
   improves, not only after the final iteration. A run that peaks at iteration 720
   and decays currently keeps only the decayed weights.
-- [ ] **Run Isolation**: Disambiguate `experiments/{env.id}_{timestamp}/` (append the
-  pid or a short hash). Two runs of the same env started within the same second
-  currently share a directory, and `exist_ok=True` silently overwrites.
+- [x] **Run Isolation**: The presence of `config.toml` marks a finished record, and
+  `manage.py train` refuses to write into one, clearing only the leftovers of an
+  interrupted attempt. Two runs started within the same second can no longer
+  silently share a directory.
 - [ ] **Resume**: `--resume <run_dir>` to continue from a saved checkpoint and
   optimizer state. Optimizer state is already persisted but cannot be consumed.
 - [ ] **Step Budget**: Optional fixed environment-step budget per iteration instead of

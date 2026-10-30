@@ -41,7 +41,7 @@ Thumbs.db
 */__pycache__/
 
 # Experiments and temporary artifacts
-# Records are tracked: text artifacts (summary.csv, REPORT.md, config.*,
+# Records are tracked: text artifacts (summary.csv, REPORT.md, config.toml,
 # training_log.csv) and comparison.png are small and are the point of a run.
 # Heavy per-run artifacts (checkpoints, plots, logs) live in artifacts/, a cache
 # that mirrors the experiments/ layout, and are ignored entirely.
@@ -55,5 +55,3 @@ config/draft/
 # Ensure templates and stable configs are tracked
 !config/templates/
 !config/stable/
-!config/templates/*.json
-!config/stable/*.json
