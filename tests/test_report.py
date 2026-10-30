@@ -1,6 +1,7 @@
 import csv
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -10,10 +11,15 @@ from utils.experiment import paths
 from utils.experiment.report import (
     SUMMARY_FIELDS,
     aggregate,
+    centered_sma,
     collect_rows,
     load_curves,
     load_metadata,
+    load_run,
     parse_panels,
+    plot_run,
+    refresh_run_plots,
+    render,
     rolling_mean,
     solved_iteration,
     stacked,
@@ -24,13 +30,14 @@ from utils.experiment.report import (
 )
 
 
-def write_csv(path, rewards):
+def write_csv(path, rewards, **metrics):
     path.parent.mkdir(parents=True, exist_ok=True)
+    names = list(metrics)
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["Iteration", "AverageReward"])
+        writer.writerow(["Iteration", "AverageReward", *names])
         for i, reward in enumerate(rewards):
-            writer.writerow([i, reward])
+            writer.writerow([i, reward, *(metrics[name][i] for name in names)])
 
 
 def make_run(root, arm, seed, rewards=None, **metadata):
@@ -249,6 +256,100 @@ def test_report_says_so_when_provenance_is_absent(tmp_path):
 
 def test_write_report_needs_a_run(tmp_path):
     assert write_report(tmp_path) is None
+
+
+def report_args(**overrides):
+    base = dict(
+        run=None, sweep=None, out=None, panel=None, smooth=20, threshold=200.0,
+        title=None, no_plot=False, no_run_plots=False,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_load_run_splits_reward_from_metrics(tmp_path):
+    write_csv(tmp_path / "training_log.csv", [1.0, 2.0], loss=[10.0, 5.0])
+
+    iterations, rewards, metrics = load_run(tmp_path)
+
+    assert iterations == [0, 1]
+    assert rewards == [1.0, 2.0]
+    assert metrics == {"loss": [10.0, 5.0]}
+
+
+def test_load_run_returns_none_without_a_csv(tmp_path):
+    assert load_run(tmp_path) is None
+
+
+def test_centered_sma_keeps_the_curve_aligned(tmp_path):
+    out = centered_sma([0.0, 0.0, 3.0, 3.0, 3.0], window=3)
+
+    assert out.tolist() == [0.0, 1.0, 2.0, 3.0, 3.0]
+
+
+def test_plot_run_writes_beside_an_external_record(tmp_path):
+    write_csv(tmp_path / "training_log.csv", [1.0] * 20, loss=[1.0] * 20)
+
+    path = plot_run(tmp_path)
+
+    assert path == tmp_path / "training_log.png"
+    assert path.exists()
+
+
+def test_plot_run_writes_into_the_artifact_mirror(tmp_path, monkeypatch):
+    monkeypatch.setattr(paths, "RECORD_ROOT", tmp_path / "experiments")
+    monkeypatch.setattr(paths, "ARTIFACT_ROOT", tmp_path / "artifacts")
+    record = tmp_path / "experiments" / "sweeps" / "x" / "arm" / "seed0"
+    write_csv(record / "training_log.csv", [1.0] * 20)
+
+    path = plot_run(record)
+
+    assert path == tmp_path / "artifacts/sweeps/x/arm/seed0/training_log.png"
+    assert path.exists()
+    assert not (record / "training_log.png").exists()
+
+
+def test_plot_run_returns_none_without_data(tmp_path):
+    assert plot_run(tmp_path) is None
+
+
+def test_refresh_run_plots_skips_incomplete_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr(paths, "RECORD_ROOT", tmp_path / "experiments")
+    monkeypatch.setattr(paths, "ARTIFACT_ROOT", tmp_path / "artifacts")
+    root = tmp_path / "experiments" / "sweeps" / "x"
+    make_run(root, "arm", 0, [1.0] * 20)
+    orphan = root / "arm" / "seed1"
+    write_csv(orphan / "training_log.csv", [1.0] * 20)
+
+    written = refresh_run_plots(root, incomplete=[orphan])
+
+    assert written == 1
+    assert (tmp_path / "artifacts/sweeps/x/arm/seed0/training_log.png").exists()
+    assert not (tmp_path / "artifacts/sweeps/x/arm/seed1/training_log.png").exists()
+
+
+def test_render_refreshes_run_plots_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(paths, "RECORD_ROOT", tmp_path / "experiments")
+    monkeypatch.setattr(paths, "ARTIFACT_ROOT", tmp_path / "artifacts")
+    root = tmp_path / "experiments" / "sweeps" / "x"
+    for seed in (0, 1):
+        make_run(root, "arm", seed, [1.0] * 20)
+
+    assert render(root, report_args()) == 0
+
+    for seed in (0, 1):
+        assert (tmp_path / "artifacts/sweeps/x/arm" / f"seed{seed}" / "training_log.png").exists()
+
+
+def test_render_can_skip_run_plots(tmp_path, monkeypatch):
+    monkeypatch.setattr(paths, "RECORD_ROOT", tmp_path / "experiments")
+    monkeypatch.setattr(paths, "ARTIFACT_ROOT", tmp_path / "artifacts")
+    root = tmp_path / "experiments" / "sweeps" / "x"
+    make_run(root, "arm", 0, [1.0] * 20)
+
+    render(root, report_args(no_run_plots=True))
+
+    assert not list((tmp_path / "artifacts").rglob("*.png"))
 
 
 @pytest.fixture

@@ -1,4 +1,3 @@
-import os
 from .data_collector import DataCollector
 from .visualizer import Visualizer
 from utils.logger import logger, console
@@ -15,15 +14,13 @@ class Dashboard:
             total_iterations: int,
             window_size: int = 50,
             save_dir: str = None,
-            artifact_dir: str = None,
             modes: list = None
     ):
         self.modes = modes or []
         self.tracked_metrics = []
+        # Only the CSV belongs here: records are tracked. The training plot is
+        # derived and is drawn by ``utils.experiment.report`` from that CSV.
         self.save_dir = save_dir
-        # Records keep the CSV; the plot is a heavy artifact and may live in the
-        # mirrored cache tree instead. Default to one directory (dry runs).
-        self.artifact_dir = artifact_dir or save_dir
 
         self.data = DataCollector(window_size=window_size, save_dir=self.save_dir)
         self.viz = Visualizer(agent_name, env_name, window_size=window_size)
@@ -82,15 +79,6 @@ class Dashboard:
     def close(self):
         if self.progress:
             self.progress.stop()
-        
-        logger.info(f"[bold green]Task for {self.viz.agent_name} in {self.viz.env_name} completed![/bold green]")
 
-        if self.artifact_dir:
-            os.makedirs(self.artifact_dir, exist_ok=True)
-            self.viz.save_final(
-                self.data.iterations,
-                self.data.full_rewards,
-                self.data.metrics_history,
-                os.path.join(self.artifact_dir, "training_log.png")
-            )
+        logger.info(f"[bold green]Task for {self.viz.agent_name} in {self.viz.env_name} completed![/bold green]")
         self.data.close()
