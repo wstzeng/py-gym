@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from agent.components.encoder import TransformerCritic
+from agent.components.policy import TransformerCritic
 from utils.builder import build_component
 
 

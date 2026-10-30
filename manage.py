@@ -11,30 +11,36 @@ from utils.test import test_loop
 from utils.logger import logger, setup_logger, Dashboard
 from utils.provenance import collect as collect_provenance
 from utils.seed import resolve_seed, set_global_seed
+from utils.experiment import paths
 
 # Files a crashed run may have left behind. The config snapshot is never one of
 # them: it is written last, atomically, and marks the run as completed.
-LEFTOVER_FILES = ("model.ckpt", "training_log.csv", "training_log.png", "train.log")
+RECORD_FILES = ("training_log.csv",)
+ARTIFACT_FILES = ("model.ckpt", "training_log.png", "train.log")
 
 
-def prepare_save_dir(save_dir):
+def prepare_run_dirs(record_dir, artifact_dir):
     """Clear a partial run, or refuse to overwrite a completed one.
 
-    The directory itself is kept: ``--save-dir`` may point somewhere shared with
-    other files, so only the known per-run artifacts are removed.
+    The record directory holds the config snapshot, so its presence is what makes
+    a run complete. Only the known per-run files are removed: ``--save-dir`` may
+    share a directory with unrelated files. Both directories are kept, since
+    ``artifact_for`` may point at a directory that already holds other runs.
     """
-    if os.path.exists(os.path.join(save_dir, "config.toml")):
+    if os.path.exists(os.path.join(record_dir, "config.toml")):
         raise SystemExit(
-            f"error: {save_dir} already holds a completed run (config.toml). "
+            f"error: {record_dir} already holds a completed run (config.toml). "
             "Delete it or choose another --save-dir."
         )
 
-    os.makedirs(save_dir, exist_ok=True)
-    for name in LEFTOVER_FILES:
-        path = os.path.join(save_dir, name)
-        if os.path.exists(path):
-            logger.warning(f"Removing leftover from an incomplete run: {path}")
-            os.remove(path)
+    os.makedirs(record_dir, exist_ok=True)
+    os.makedirs(artifact_dir, exist_ok=True)
+    for directory, names in ((record_dir, RECORD_FILES), (artifact_dir, ARTIFACT_FILES)):
+        for name in names:
+            path = os.path.join(directory, name)
+            if os.path.exists(path):
+                logger.warning(f"Removing leftover from an incomplete run: {path}")
+                os.remove(path)
 
 
 def get_base_parser():
@@ -59,13 +65,17 @@ def run_train(args):
 
     if args.save_dir:
         save_dir = args.save_dir
-        logger.info(f"Artifacts will be stored in: {save_dir}")
     elif args.dry:
         save_dir = tempfile.mkdtemp(prefix="pygym_")
-        logger.warning(f"[Dry-run] Artifacts will be stored in: {save_dir}")
+        logger.warning(f"[Dry-run] Results will be stored in: {save_dir}")
     else:
         save_dir = os.path.join("experiments", f"{config.env.id}_{timestamp}")
-    prepare_save_dir(save_dir)
+
+    # Records are tracked; checkpoints and plots are not, so they go to the
+    # mirrored cache tree. Outside experiments/ the two paths coincide.
+    artifact_dir = str(paths.artifact_for(save_dir))
+    prepare_run_dirs(save_dir, artifact_dir)
+    logger.info(f"Record: {save_dir} | Artifacts: {artifact_dir}")
 
     # 2. Inject Metadata
     config.metadata.update({
@@ -90,6 +100,7 @@ def run_train(args):
         agent_name=agent.__class__.__name__,
         total_iterations=args.iterations,
         save_dir=save_dir,
+        artifact_dir=artifact_dir,
         modes=args.record
     )
 
@@ -116,11 +127,11 @@ def run_train(args):
 
     # Final artifacts packing. The snapshot goes last and atomically: its
     # presence is what tells every other tool that this run completed.
-    agent.save_checkpoints(os.path.join(save_dir, "model.ckpt"))
+    agent.save_checkpoints(os.path.join(artifact_dir, "model.ckpt"))
     dashboard.close()
     config.metadata["wall_seconds"] = round(time.monotonic() - started, 1)
     config.save(os.path.join(save_dir, "config.toml"))
-    logger.info(f"Results archived in: {save_dir}")
+    logger.info(f"Results archived in: {save_dir} (artifacts: {artifact_dir})")
 
     # 5. Optional Evaluation
     if args.eval > 0:
@@ -138,7 +149,13 @@ def run_test(args):
     """Run evaluation from an existing experiment directory."""
     toml_config_path = os.path.join(args.exp_dir, "config.toml")
     json_config_path = os.path.join(args.exp_dir, "config.json")
-    ckpt_path = os.path.join(args.exp_dir, "model.ckpt")
+    ckpt_path = os.path.join(str(paths.artifact_for(args.exp_dir)), "model.ckpt")
+
+    if not os.path.exists(ckpt_path):
+        raise FileNotFoundError(
+            f"Checkpoint for {args.exp_dir} not found (expected {ckpt_path}). "
+            "The record is tracked but its artifacts live in the cache tree."
+        )
 
     if os.path.exists(toml_config_path):
         config_path = toml_config_path

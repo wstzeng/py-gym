@@ -15,11 +15,15 @@ class Dashboard:
             total_iterations: int,
             window_size: int = 50,
             save_dir: str = None,
+            artifact_dir: str = None,
             modes: list = None
     ):
         self.modes = modes or []
         self.tracked_metrics = []
         self.save_dir = save_dir
+        # Records keep the CSV; the plot is a heavy artifact and may live in the
+        # mirrored cache tree instead. Default to one directory (dry runs).
+        self.artifact_dir = artifact_dir or save_dir
 
         self.data = DataCollector(window_size=window_size, save_dir=self.save_dir)
         self.viz = Visualizer(agent_name, env_name, window_size=window_size)
@@ -81,11 +85,12 @@ class Dashboard:
         
         logger.info(f"[bold green]Task for {self.viz.agent_name} in {self.viz.env_name} completed![/bold green]")
 
-        if self.save_dir:
+        if self.artifact_dir:
+            os.makedirs(self.artifact_dir, exist_ok=True)
             self.viz.save_final(
                 self.data.iterations,
                 self.data.full_rewards,
                 self.data.metrics_history,
-                os.path.join(self.save_dir, "training_log.png")
+                os.path.join(self.artifact_dir, "training_log.png")
             )
         self.data.close()

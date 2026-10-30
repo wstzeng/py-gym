@@ -15,7 +15,7 @@ Tiers:
 import pytest
 import torch
 
-from agent.components.encoder import (
+from agent.components.policy import (
     ConvCritic,
     ResidualMLPCritic,
     TransformerCritic,
