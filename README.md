@@ -17,7 +17,7 @@ The framework follows a strict modular design:
     - **[Encoder](agent/components/encoder)**: State representation learning and feature extraction.
     - **[Policy](agent/components/policy)**: Distribution, value, and action-handler logic.
     - **[Buffer](agent/components/buffer)**: Rollout and experience storage.
-- **[Config](config/)**: TOML/JSON configuration entities.
+- **[Config](config/)**: TOML configuration entities; legacy JSON snapshots still load.
 - **[Utils](utils/)**: Builders, training loops, logging, and experiment artifacts.
 
 State dimensions are inferred at build time: the encoder receives the environment
@@ -51,16 +51,21 @@ recipes in **[config/templates](config/templates)**.
 
 ## Experiment Management
 
-Every training run generates a self-contained directory in `experiments/`:
+Every training run generates a self-contained record in `experiments/`, and its
+heavy files in a mirrored path under `artifacts/`:
 
 ```text
-experiments/ENV_TIMESTAMP/
-├── config.toml       # Full configuration (TOML)
-├── config.json       # Same contents as `config.toml` in JSON format
+experiments/ENV_TIMESTAMP/          # tracked
+├── config.toml       # Full configuration
+└── training_log.csv  # Step-by-step metrics (Reward, Loss)
+
+artifacts/ENV_TIMESTAMP/            # ignored cache, same relative path
 ├── model.ckpt        # Weights and optimizer state
-├── training_log.csv  # Step-by-step metrics (Reward, Loss)
 └── training_log.png  # Visualized performance curve
 ```
+
+`python manage.py test experiments/ENV_TIMESTAMP` finds the checkpoint through
+that mirror.
 
 ## Setup & Usage
 
@@ -126,7 +131,8 @@ Train with a configuration:
 python manage.py train config/templates/cartpole_ppo.toml
 ```
 
-`toml` and `json` configs are both supported. Useful flags:
+`toml` configs are the format; a legacy `json` config still loads, but is
+never written. Useful flags:
 
 ```bash
 python manage.py train config/templates/cartpole_ppo.toml \

@@ -4,6 +4,10 @@ This project uses a component-based configuration system. Components are
 instantiated by [`utils/builder.py`](../utils/builder.py) from the following
 schema:
 
+A file has exactly four top-level sections: `env`, `agent`, `hyper_params` and
+`metadata` (the last is written into run snapshots by `manage.py`). Any other
+top-level key is an error rather than a silently ignored table.
+
 - `type`: The class name of the component.
 - `params`: Arguments passed to the class constructor.
 - Sub-components: Declared directly under their parent, for example
@@ -82,9 +86,23 @@ type = "TrajectoryBuffer"
 - **`encoder`**: Transforms raw states into latent features.
     - `layers`: Layer definitions for `VectorEncoder`.
     - The encoder's output `feature_dim` is passed to the policy automatically.
+    - Encoders produce features, never values. A value network placed here is
+      accepted by the builder but threads nothing downstream — put it under
+      `policy.critic` instead.
 - **`policy`**: Distribution and value heads.
     - `actor`: Network producing distribution parameters.
-    - `critic`: Optional value network for actor-critic algorithms.
+    - `critic`: Optional value network for actor-critic algorithms. Either a
+      plain `Sequential`, or one of the built-in variants in
+      [`agent/components/policy`](../agent/components/policy):
+
+        | Type | Mixing | Params |
+        | :--- | :--- | :--- |
+        | `ConvCritic` | local (1D conv over feature tokens) | `d_model`, `depth`, `n_tokens`, `kernel_size` |
+        | `ResidualMLPCritic` | dense, LayerNorm + residual | `d_model`, `hidden`, `depth` |
+        | `TransformerCritic` | self-attention over feature tokens | `d_model`, `nhead`, `depth`, `n_tokens`, `dim_feedforward` |
+
+        All three take the encoder's `feature_dim` automatically and return one
+        value per sample.
     - `handler`: Converts policy outputs into environment actions.
 - **`buffer`**: Rollout storage (currently `TrajectoryBuffer`).
 

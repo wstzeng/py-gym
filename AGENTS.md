@@ -18,29 +18,38 @@ commands from the repository root. There is no build step or installed package l
 
 ## Commands
 - Train: `python manage.py train config/templates/lunarlander_ppo.toml`
-  - TOML and JSON are both supported; the file extension selects the loader.
+  - The loader picks by extension; hand-written configs are TOML, and legacy
+    `.json` is read but never written (see "Config and artifacts").
   - `-T/--iterations` (default 500), `-N/--episodes` (episodes per iteration),
     `--eval N`, `--device cpu|cuda`.
   - `--seed N` makes a run reproducible. Omitting it draws a fresh seed, so
     every run stays unlinked; the seed actually used is always written to
-    `config.json` / `config.toml` metadata. Bit-identical reruns also need the
-    same `OMP_NUM_THREADS`, because torch CPU kernels may reorder reductions.
-- Test a run: `python manage.py test experiments/<run_dir> -N 5`
-  - Requires `config.toml` (or `config.json`) and `model.ckpt` in that directory.
+    `config.toml` metadata. Bit-identical reruns also need the same
+    `OMP_NUM_THREADS`, because torch CPU kernels may reorder reductions.
+- Test a run: `python manage.py test experiments/<record> -N 5`
+  - Requires `config.toml`; the checkpoint is looked up at the mirrored path
+    under `artifacts/`, not next to the record.
 - Headless: `--record cli` avoids opening the live matplotlib window
   (the default is `cli live`).
 - Smoke test: `python manage.py train <config> --dry -T 1 -N 1`.
   `--debug` implies `--dry` and enables verbose logging.
-- Sweeps: `poetry run python scripts/sweep.py --configs '<glob>' --seeds 0 1 2
-  --jobs 4 --threads 4`
-  - Runs each (config, seed) into `experiments/sweeps/<name>/<stem>/seed<N>/`
-    through `--save-dir`, so parallel launches never collide on the timestamped
-    default path.
-  - Resumable: runs whose `run.json` reports `returncode: 0` are skipped;
-    `--force` redoes them, `--plan-only` prints the matrix.
-  - Ends with a `summary.csv` holding last-50/last-100, solved iteration, best
-    and wall time per run.
-  - `--save-dir DIR` also works on its own with plain `manage.py train`.
+- Matrix runs: there is no sweep command; a shell loop over the matrix is the
+  whole tool. It skips records that already exist, so a re-run is a resume:
+
+  ```bash
+  for cfg in config/ablation/*.toml; do for seed in 0 1 2; do
+    out=experiments/sweeps/<name>/$(basename "$cfg" .toml)/seed$seed
+    [ -e "$out/config.toml" ] && continue
+    OMP_NUM_THREADS=4 python manage.py train "$cfg" -T 600 -N 20 --seed "$seed" \
+      --save-dir "$out" --record cli
+  done; done
+  ```
+
+  Parallelise by wrapping the body in `xargs -P 4`; give each worker the same
+  thread count so the recorded provenance stays comparable.
+- Report a sweep: `python manage.py report --sweep experiments/sweeps/<name>`
+  writes `summary.csv`, `REPORT.md` and `comparison.png` from the logs alone
+  (`--panel 'Title:arm1,arm2'` splits tiers, `--smooth`, `--threshold`).
 - Tests: `pytest` (tests live in `tests/` and are tracked).
   - `tests/test_templates_smoke.py` is marked `integration`: it builds every
     template and steps its env. Box2D cases skip when `Box2D` is missing.
@@ -55,6 +64,30 @@ commands from the repository root. There is no build step or installed package l
   `agent/learner/__init__.py::__all__`.
 - `agent/components/{encoder,policy,buffer}/`: composable modules. A policy owns
   `actor`, `critic` (optional), and `handler`.
+- **Where a component goes is decided by the slot it fills, never by the builder
+  mechanism it uses.** `requires_input_dim`, `sub_components()` and `feature_dim`
+  are shared plumbing; "it needs an input dim and contains a network" is not a
+  reason to put something under `encoder/`. Get this wrong and nothing fails:
+  the registry is one flat namespace, so a value network dropped into `encoder/`
+  still builds, still trains, and silently returns a scalar where the policy
+  expects features.
+  - `encoder/`: observation -> latent features. Every export must subclass
+    `BaseEncoder` and expose `feature_dim`; `build_agent()` threads that number
+    into the policy. No value networks.
+  - `policy/`: the policy classes plus the leaf networks of their sub-slots —
+    `actor_*.py`, `*_critic.py` (one value per sample, shape `(N, 1)`),
+    `action_handler.py`. These are graph leaves, not policies; they are exported
+    from `policy/__init__.py::__all__` so the registry sees them.
+  - Add a sub-slot implementation as a module inside the owning package. Only
+    create a new package for a new **agent-level** slot, i.e. a new name in
+    `BaseAgent.sub_components()`.
+  - `tests/test_component_placement.py` enforces the rule; `pytest` will not
+    catch a misplacement any other way.
+- Class names are part of the config format (`type = "ConvCritic"`) and every
+  recorded run keeps its `config.toml` forever. Moving a class between modules is
+  safe — checkpoints key on attribute paths such as `policy.critic.project.weight`.
+  Renaming a class is a breaking change to all recorded runs and needs a
+  compatibility export.
 - `utils/builder.py`: factory and component registry.
   - Registry is assembled from `__all__` of `agent`, the component packages,
     and `action_handler`. New classes must be exported there; a new component
@@ -82,13 +115,44 @@ commands from the repository root. There is no build step or installed package l
   states no matter how many episodes they reset.
 
 ## Config and artifacts
-- `env.default` is merged into both training and testing; `env.training` and
-  `env.testing` override per mode.
+- One format is written: TOML. `AgentConfig.save()` dumps to a sibling `.tmp`
+  and `os.replace()`s it into place; loading reads `.toml` first and falls back
+  to a legacy `.json` snapshot, so recorded runs from before this rule still
+  open. `json5` is gone; there is no second writer to keep in sync.
+- Unknown top-level sections are rejected, so a typo cannot silently drop a
+  whole table.
+- A run is complete when its record directory holds `config.toml`. The snapshot
+  is written last, after the checkpoint and the CSV, so an interrupted run
+  leaves none; `train` then clears the known leftovers and starts from
+  iteration 0, and refuses to overwrite a directory that already has one.
+- Records and artifacts are two trees with one layout. `experiments/` is
+  tracked and branch-scoped: `config.toml`, `training_log.csv`, and generated
+  `summary.csv` / `REPORT.md` / `comparison.png`, plus a `RESULTS.md` for
+  interpretation. `artifacts/` is ignored and mirrors the same relative paths;
+  it holds `model.ckpt`, `training_log.png` and `train.log`. `paths.artifact_for()`
+  maps one to the other, and a `--save-dir` outside `experiments/` (a dry run)
+  keeps everything together.
 - Config directories carry intent: `config/templates/` holds minimal runnable
-  examples, `config/stable/` holds tuned, reproducible recipes, and
+  examples, `config/stable/` holds tuned, reproducible recipes,
+  `config/ablation/` holds deliberately designed comparison matrices, and
   `config/draft/` is gitignored scratch space for unproven ideas.
-- A completed run writes `experiments/{env.id}_{timestamp}/` with `config.toml`,
-  `config.json`, `model.ckpt` (including optimizer state), and
-  `training_log.csv/png`. Ctrl-C intentionally skips config and checkpoint saving.
+- Config directories hold only `.toml` (plus, at most, a README describing the
+  experiment's design). Results do **not** live there.
+- Measured numbers belong in generated files, not prose: `summary.csv` is the
+  source of truth, `REPORT.md` is generated from it, and `comparison.png` is
+  regenerated from `training_log.csv`. `RESULTS.md` holds interpretation only.
 - Docs drift is possible; trust `manage.py`, the config templates, and the
   builder contract above.
+
+## Branches and experiment records
+- Code lives on `feat/*`, configurations and their results on `exp/*`. A feature
+  branch merges into `main` with `--no-ff`; an `exp/*` branch takes `main` in the
+  same way. **Never rebase an `exp/*` branch**: its result commits are history,
+  and rewriting them to move the base buys nothing while forcing a force-push.
+- One checkout, no worktrees. `experiments/` is tracked on `exp/*`, so switching
+  branch switches which records are on disk while `artifacts/` stays put.
+  Because a run writes into a branch's tree, **do not switch branches while a
+  matrix is running**: finish or stop it, merge, then move on.
+- Every run records its provenance (`utils/provenance.py`): `git_sha`,
+  `git_dirty`, `torch_threads`, `omp_num_threads` and the python/torch/numpy
+  versions. `git_dirty: true` means the working tree did not match that commit.
