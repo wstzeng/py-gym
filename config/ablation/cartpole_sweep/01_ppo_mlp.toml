@@ -1,0 +1,66 @@
+# Lightweight CartPole matrix: one policy, three critic shapes.
+#
+# Small enough to run on a laptop CPU in minutes; the point is that every arm
+# goes through the same builder, the same completion contract and the same
+# report, and that the critic implementations moved beside the policy slot
+# still train in an environment other than LunarLander.
+
+[env]
+id = "CartPole-v1"
+
+[env.default]
+max_episode_steps = 500
+
+[agent]
+type = "PPOAgent"
+
+[agent.encoder]
+type = "VectorEncoder"
+layers = [
+    { type = "Linear", out_features = 32 },
+    { type = "LeakyReLU" },
+]
+
+[agent.policy]
+type = "ActorCriticPolicy"
+
+[agent.policy.handler]
+type = "CategoricalHandler"
+
+[agent.policy.handler.params]
+action_dim = 2
+
+[agent.policy.actor]
+type = "Sequential"
+layers = [
+    { type = "Linear", out_features = 2 },
+]
+
+[agent.policy.critic]
+type = "Sequential"
+layers = [
+    { type = "Linear", out_features = 64 },
+    { type = "LeakyReLU" },
+    { type = "Linear", out_features = 1 },
+]
+
+[agent.buffer]
+type = "TrajectoryBuffer"
+
+[hyper_params]
+eps_clip = 0.2
+k_epochs = 4
+critic_weight = 0.5
+entropy_weight = 0.01
+gamma = 0.99
+gae_lambda = 0.95
+
+[hyper_params.optimizer]
+type = "AdamW"
+
+[hyper_params.optimizer.params]
+weight_decay = 0.01
+lrs = { default = 0.001, actor = 0.0003 }
+
+[hyper_params.criterion]
+critic_loss = "MSELoss"
