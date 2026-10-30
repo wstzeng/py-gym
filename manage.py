@@ -1,4 +1,5 @@
 import os
+import time
 import argparse
 import tempfile
 from datetime import datetime
@@ -8,7 +9,33 @@ from utils.builder import build_agent
 from utils.train import train_loop
 from utils.test import test_loop
 from utils.logger import logger, setup_logger, Dashboard
+from utils.provenance import collect as collect_provenance
 from utils.seed import resolve_seed, set_global_seed
+
+# Files a crashed run may have left behind. The config snapshot is never one of
+# them: it is written last, atomically, and marks the run as completed.
+LEFTOVER_FILES = ("model.ckpt", "training_log.csv", "training_log.png", "train.log")
+
+
+def prepare_save_dir(save_dir):
+    """Clear a partial run, or refuse to overwrite a completed one.
+
+    The directory itself is kept: ``--save-dir`` may point somewhere shared with
+    other files, so only the known per-run artifacts are removed.
+    """
+    if os.path.exists(os.path.join(save_dir, "config.toml")):
+        raise SystemExit(
+            f"error: {save_dir} already holds a completed run (config.toml). "
+            "Delete it or choose another --save-dir."
+        )
+
+    os.makedirs(save_dir, exist_ok=True)
+    for name in LEFTOVER_FILES:
+        path = os.path.join(save_dir, name)
+        if os.path.exists(path):
+            logger.warning(f"Removing leftover from an incomplete run: {path}")
+            os.remove(path)
+
 
 def get_base_parser():
     """Shared arguments for both train and test modes."""
@@ -32,14 +59,13 @@ def run_train(args):
 
     if args.save_dir:
         save_dir = args.save_dir
-        os.makedirs(save_dir, exist_ok=True)
         logger.info(f"Artifacts will be stored in: {save_dir}")
     elif args.dry:
         save_dir = tempfile.mkdtemp(prefix="pygym_")
         logger.warning(f"[Dry-run] Artifacts will be stored in: {save_dir}")
     else:
         save_dir = os.path.join("experiments", f"{config.env.id}_{timestamp}")
-        os.makedirs(save_dir, exist_ok=True)
+    prepare_save_dir(save_dir)
 
     # 2. Inject Metadata
     config.metadata.update({
@@ -50,6 +76,9 @@ def run_train(args):
         "dry_run": args.dry,
         "seed": seed
     })
+    # Provenance: which code, how many threads, which library versions. This is
+    # part of the snapshot written when the run completes.
+    config.metadata.update(collect_provenance())
 
     # 3. Build Components
     # Seed before building: weight initialisation consumes torch's global RNG.
@@ -66,6 +95,7 @@ def run_train(args):
 
     # 4. Training Loop
     train_env_kwargs = {**config.env.default, **config.env.training}
+    started = time.monotonic()
     try:
         train_loop(
             env_name=config.env.id,
@@ -84,11 +114,12 @@ def run_train(args):
         )
         return
 
-    # Final artifacts packing
+    # Final artifacts packing. The snapshot goes last and atomically: its
+    # presence is what tells every other tool that this run completed.
     agent.save_checkpoints(os.path.join(save_dir, "model.ckpt"))
-    config.save(os.path.join(save_dir, "config.json"))
-    config.save(os.path.join(save_dir, "config.toml"))
     dashboard.close()
+    config.metadata["wall_seconds"] = round(time.monotonic() - started, 1)
+    config.save(os.path.join(save_dir, "config.toml"))
     logger.info(f"Results archived in: {save_dir}")
 
     # 5. Optional Evaluation
@@ -114,7 +145,9 @@ def run_test(args):
     elif os.path.exists(json_config_path):
         config_path = json_config_path
     else:
-        raise FileNotFoundError(f"Config not found in {args.exp_dir}")
+        raise FileNotFoundError(
+            f"Config not found in {args.exp_dir} (expected config.toml, legacy config.json)"
+        )
 
     config = AgentConfig.load(config_path)
     # Older checkpoints predate seed tracking: fall back to a fixed seed so
@@ -154,6 +187,10 @@ def run_exp(args):
     # TODO: Implement experiment list/archive logic
     raise NotImplementedError("Experiment management mode (TBD)")
 
+def run_report(args):
+    from utils.experiment import report
+    return report.run(args)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Py-Gym Framework Manager")
     subparsers = parser.add_subparsers(dest='mode', required=True)
@@ -182,10 +219,20 @@ if __name__ == '__main__':
     exp_p = subparsers.add_parser('exp', help='Manage saved experiments')
     exp_p.add_argument('action', choices=['archive', 'list'])
 
+    # Report Command
+    report_p = subparsers.add_parser('report', help='Regenerate a sweep report')
+    report_p.add_argument('--sweep', required=True, help='Sweep name or directory')
+    report_p.add_argument('--out', default=None, help='Output PNG (default: <sweep>/comparison.png)')
+    report_p.add_argument('--panel', action='append', default=None, help="'Title:arm1,arm2'")
+    report_p.add_argument('--smooth', type=int, default=20)
+    report_p.add_argument('--threshold', type=float, default=200.0)
+    report_p.add_argument('--title', default=None)
+    report_p.add_argument('--no-plot', action='store_true', help='Only rewrite REPORT.md')
+
     args = parser.parse_args()
 
     level = 'INFO'
-    if args.debug:
+    if getattr(args, 'debug', False):
         level = 'DEBUG'
         args.dry = True
     logger = setup_logger(level=level)
@@ -193,6 +240,7 @@ if __name__ == '__main__':
     modes = {
         'train': run_train,
         'test': run_test,
-        'exp': run_exp
+        'exp': run_exp,
+        'report': run_report,
     }
-    modes[args.mode](args)
+    raise SystemExit(modes[args.mode](args) or 0)
