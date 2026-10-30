@@ -149,9 +149,20 @@ commands from the repository root. There is no build step or installed package l
 
 ## Branches and experiment records
 - Code lives on `feat/*`, configurations and their results on `exp/*`. A feature
-  branch merges into `main` with `--no-ff`; an `exp/*` branch takes `main` in the
-  same way. **Never rebase an `exp/*` branch**: its result commits are history,
-  and rewriting them to move the base buys nothing while forcing a force-push.
+  branch merges into `main` with `--no-ff`. **Never rebase an `exp/*` branch**:
+  its result commits are history, and rewriting them to move the base buys
+  nothing while forcing a force-push.
+- An `exp/*` branch only ever takes a **tagged** commit of `main`, never the
+  branch tip: start it at a release tag (`git switch -c exp/<name> v0.2.0`) and
+  later merge the next tag (`git merge --no-ff v0.2.0`, which an annotated tag
+  records as `Merge tag 'v0.2.0'`). Untagged code therefore reaches an
+  experiment only through a release, so the `git_sha` every run records is
+  always a published version — records stay reproducible and comparable across
+  branches. The cost is that refactors wait for a release, so tag whenever a
+  change lands that experiments should be able to pick up.
+- Releases are annotated `vMAJOR.MINOR.PATCH` tags on `main`, cut from a commit
+  whose `pyproject.toml` already carries that number — bump the version first,
+  verify, then tag, so the tag never names a tree that disagrees with it.
 - One checkout, no worktrees. `experiments/` is tracked on `exp/*`, so switching
   branch switches which records are on disk while `artifacts/` stays put.
   Because a run writes into a branch's tree, **do not switch branches while a
