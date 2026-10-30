@@ -1,0 +1,83 @@
+[env]
+id = "CartPole-v1"
+
+[env.default]
+max_episode_steps = 500
+
+[env.training]
+
+[env.testing]
+
+[agent]
+type = "PPOAgent"
+
+[agent.encoder]
+type = "VectorEncoder"
+layers = [
+    { type = "Linear", out_features = 32 },
+    { type = "LeakyReLU" },
+]
+
+[agent.policy]
+type = "ActorCriticPolicy"
+
+[agent.policy.handler]
+type = "CategoricalHandler"
+
+[agent.policy.handler.params]
+action_dim = 2
+
+[agent.policy.actor]
+type = "Sequential"
+layers = [
+    { type = "Linear", out_features = 2 },
+]
+
+[agent.policy.critic]
+type = "Sequential"
+layers = [
+    { type = "Linear", out_features = 64 },
+    { type = "LeakyReLU" },
+    { type = "Linear", out_features = 1 },
+]
+
+[agent.buffer]
+type = "TrajectoryBuffer"
+
+[hyper_params]
+eps_clip = 0.2
+k_epochs = 4
+critic_weight = 0.5
+entropy_weight = 0.01
+gamma = 0.99
+gae_lambda = 0.95
+
+[hyper_params.optimizer]
+type = "AdamW"
+
+[hyper_params.optimizer.params]
+weight_decay = 0.01
+
+[hyper_params.optimizer.params.lrs]
+default = 0.001
+actor = 0.0003
+
+[hyper_params.criterion]
+critic_loss = "MSELoss"
+
+[metadata]
+iterations = 800
+episodes = 5
+device = "cpu"
+timestamp = "20261030_234038"
+dry_run = false
+seed = 1
+git_sha = "992bf89ccc1c3c264003e029d1ff8fb82afcd2e9"
+git_dirty = false
+torch_threads = 2
+python = "3.12.13"
+torch = "2.6.0+cpu"
+numpy = "1.26.4"
+python_executable = "/home/wstzeng/develop/project/py-gym/.venv/bin/python"
+omp_num_threads = "2"
+wall_seconds = 425.8
